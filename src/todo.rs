@@ -444,9 +444,11 @@ mod tests {
         let store = new_store();
         let (_, body) = post_todo(&store, "text=buy+milk").await;
 
-        // The input carries no value attribute, so the swapped-in form is blank.
+        // The input carries no value attribute, so the swapped-in form is
+        // blank. Anchor on the tag itself rather than the class, so a
+        // `value` written before `class="todo-input"` is caught too.
         let input = body
-            .split_once("todo-input")
+            .split_once("<input")
             .expect("input rendered")
             .1
             .split_once('>')
