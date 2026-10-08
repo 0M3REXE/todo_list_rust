@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/htmx.org@4.0.0"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <title>Greetings</title>
+</head>
+<body>
+    <div class="card">
+        <h1 class="card__title">👋 hello there</h1>
+        <p class="card__subtitle">type a name and pick a greeting</p>
+        <form class="form">
+            <input
+                class="form__input"
+                type="text"
+                name="name"
+                placeholder="Enter a name..."
+                autocomplete="off"
+            >
+            <div class="form__actions">
+                <button
+                    class="btn btn--hello"
+                    hx-get="/hello"
+                    hx-target="#result"
+                    hx-swap="innerHTML"
+                    hx-include="closest form"
+                >
+                    Say Hello
+                </button>
+                <button
+                    class="btn btn--goodbye"
+                    hx-get="/goodbye"
+                    hx-target="#result"
+                    hx-swap="innerHTML"
+                    hx-include="closest form"
+                >
+                    Say Goodbye
+                </button>
+            </div>
+        </form>
+        <div id="result" class="result"></div>
+    </div>
+</body>
+</html>
