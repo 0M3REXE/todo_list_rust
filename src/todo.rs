@@ -30,6 +30,7 @@ impl From<askama::Error> for AppError {
 
 // --- Model ---
 
+#[derive(Clone)]
 pub struct Todo {
     pub id: u64,
     pub text: String,
@@ -86,9 +87,10 @@ impl TodoList {
     }
 
     /// Active todos first, completed after. `sort_by_key` is stable, so
-    /// insertion order survives inside each group.
-    pub fn sorted(&self) -> Vec<&Todo> {
-        let mut items: Vec<&Todo> = self.items.iter().collect();
+    /// insertion order survives inside each group. Returns owned todos so
+    /// callers can drop the lock guard before rendering.
+    pub fn sorted(&self) -> Vec<Todo> {
+        let mut items = self.items.clone();
         items.sort_by_key(|t| t.done);
         items
     }
@@ -108,7 +110,7 @@ pub fn new_store() -> TodoStore {
 /// Counts the unfinished todos for the panel's "N open" line. Askama's
 /// parser cannot handle a Rust closure in an expression, so the count is a
 /// module function the template calls as `{{ self::open_count(&todos) }}`.
-fn open_count(todos: &[&Todo]) -> usize {
+fn open_count(todos: &[Todo]) -> usize {
     todos.iter().filter(|todo| !todo.done).count()
 }
 
@@ -116,32 +118,51 @@ fn open_count(todos: &[&Todo]) -> usize {
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate<'a> {
-    todos: Vec<&'a Todo>,
+struct IndexTemplate {
+    todos: Vec<Todo>,
 }
 
 #[derive(Template)]
 #[template(path = "todo_panel.html")]
-struct TodoPanelTemplate<'a> {
-    todos: Vec<&'a Todo>,
+struct TodoPanelTemplate {
+    todos: Vec<Todo>,
 }
 
 #[derive(Template)]
 #[template(path = "todo_list.html")]
-struct TodoListTemplate<'a> {
-    todos: Vec<&'a Todo>,
+struct TodoListTemplate {
+    todos: Vec<Todo>,
 }
 
 // --- Handlers ---
 
 async fn index(State(store): State<TodoStore>) -> Result<Html<String>, AppError> {
-    let list = store.read().expect("lock poisoned");
-    let todos = list.sorted();
+    let todos = store.read().expect("lock poisoned").sorted();
     Ok(Html(IndexTemplate { todos }.render()?))
 }
 
+#[derive(serde::Deserialize)]
+struct NewTodo {
+    text: String,
+}
+
+async fn create(
+    State(store): State<TodoStore>,
+    axum::extract::Form(form): axum::extract::Form<NewTodo>,
+) -> Result<Html<String>, AppError> {
+    let todos = {
+        let mut list = store.write().expect("lock poisoned");
+        list.add(&form.text);
+        list.sorted()
+    };
+    Ok(Html(TodoPanelTemplate { todos }.render()?))
+}
+
 pub fn build_router(store: TodoStore) -> Router {
-    Router::new().route("/", get(index)).with_state(store)
+    Router::new()
+        .route("/", get(index))
+        .route("/todos", axum::routing::post(create))
+        .with_state(store)
 }
 
 #[cfg(test)]
@@ -248,7 +269,8 @@ mod tests {
         list.toggle(1);
         list.toggle(2);
 
-        let order: Vec<&str> = list.sorted().iter().map(|t| t.text.as_str()).collect();
+        let sorted = list.sorted();
+        let order: Vec<&str> = sorted.iter().map(|t| t.text.as_str()).collect();
         assert_eq!(order, vec!["three", "four", "one", "two"]);
     }
 
@@ -371,5 +393,108 @@ mod tests {
         let body = get_index(&store).await;
 
         assert!(body.contains("1 open"));
+    }
+
+    async fn post_todo(store: &TodoStore, body: &'static str) -> (StatusCode, String) {
+        let app = build_router(store.clone());
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/todos")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = res.status();
+        let text = String::from_utf8(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        (status, text)
+    }
+
+    #[tokio::test]
+    async fn create_appends_a_todo() {
+        let store = new_store();
+        let (status, body) = post_todo(&store, "text=buy+milk").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("buy milk"));
+        assert_eq!(store.read().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn create_returns_the_panel_not_a_full_page() {
+        let store = new_store();
+        let (_, body) = post_todo(&store, "text=buy+milk").await;
+
+        // A fragment, not a document — no <html>, no <head>.
+        assert!(!body.contains("<!DOCTYPE html>"));
+        assert!(body.contains("todo-panel"));
+    }
+
+    #[tokio::test]
+    async fn create_rerenders_the_input_empty_so_the_box_clears() {
+        let store = new_store();
+        let (_, body) = post_todo(&store, "text=buy+milk").await;
+
+        // The input carries no value attribute, so the swapped-in form is blank.
+        let input = body
+            .split_once("todo-input")
+            .expect("input rendered")
+            .1
+            .split_once('>')
+            .expect("input tag closed")
+            .0;
+        assert!(!input.contains("value="));
+    }
+
+    #[tokio::test]
+    async fn create_rejects_blank_text_without_adding() {
+        let store = new_store();
+        let (status, body) = post_todo(&store, "text=%20%20%20").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(store.read().unwrap().len(), 0);
+        assert!(!body.contains("%20"));
+    }
+
+    #[tokio::test]
+    async fn create_returns_a_422_when_the_body_cannot_be_parsed() {
+        let store = new_store();
+        let app = build_router(store.clone());
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/todos")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("no_text_field=1"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn create_escapes_html_in_the_todo_text() {
+        let store = new_store();
+        let (_, body) = post_todo(&store, "text=%3Cscript%3Ealert(1)%3C%2Fscript%3E").await;
+
+        let text_row = body
+            .lines()
+            .find(|line| line.contains("class=\"todo-text\""))
+            .expect("todo text rendered");
+
+        assert!(text_row.contains("&#60;script&#62;"));
+        assert!(!text_row.contains("<script>"));
     }
 }
