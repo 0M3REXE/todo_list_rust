@@ -132,12 +132,21 @@ test case with no port bound.
 **Shared mutation path.** Toggle and delete share a `Path<u64>` extractor and a private helper that
 locks, mutates, and renders, so the lock-and-render step is written once:
 
-```
-with_list(store, |list| { ...mutation... })
+```rust
+fn with_list<F>(store: &TodoStore, mutate: F) -> Result<Response, AppError>
+where
+    F: FnOnce(&mut TodoList) -> bool,
 ```
 
 The helper takes a closure over `&mut TodoList`, renders `todo_list.html`, and returns
 `(StatusCode, Html<String>)` — `404` when the closure reports it found nothing, `200` otherwise.
+
+**`sorted()` returns owned `Vec<Todo>`, not `Vec<&Todo>`.** A borrowed return would tie the
+borrow's lifetime to the `RwLock` guard, which makes "drop the lock before rendering" impossible to
+express — rendering does I/O and must not hold a write lock. All three template structs therefore
+take `Vec<Todo>`, and `sorted()` clones once per render. The alternative, rendering inside the lock
+scope, was rejected because Task 5's `with_list` would inherit the same constraint and rendering
+under a write lock serialises every request behind it.
 
 **Create flow:**
 
