@@ -2,8 +2,11 @@ use std::sync::{Arc, RwLock};
 
 use askama::Template;
 use axum::{
+    Router,
+    extract::State,
     http::StatusCode,
     response::{Html, IntoResponse, Response},
+    routing::get,
 };
 
 // --- Error handling ---
@@ -102,9 +105,51 @@ pub fn new_store() -> TodoStore {
     Arc::new(RwLock::new(TodoList::default()))
 }
 
+/// Counts the unfinished todos for the panel's "N open" line. Askama's
+/// parser cannot handle a Rust closure in an expression, so the count is a
+/// module function the template calls as `{{ self::open_count(&todos) }}`.
+fn open_count(todos: &[&Todo]) -> usize {
+    todos.iter().filter(|todo| !todo.done).count()
+}
+
+// --- Templates ---
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct IndexTemplate<'a> {
+    todos: Vec<&'a Todo>,
+}
+
+#[derive(Template)]
+#[template(path = "todo_panel.html")]
+struct TodoPanelTemplate<'a> {
+    todos: Vec<&'a Todo>,
+}
+
+#[derive(Template)]
+#[template(path = "todo_list.html")]
+struct TodoListTemplate<'a> {
+    todos: Vec<&'a Todo>,
+}
+
+// --- Handlers ---
+
+async fn index(State(store): State<TodoStore>) -> Result<Html<String>, AppError> {
+    let list = store.read().expect("lock poisoned");
+    let todos = list.sorted();
+    Ok(Html(IndexTemplate { todos }.render()?))
+}
+
+pub fn build_router(store: TodoStore) -> Router {
+    Router::new().route("/", get(index)).with_state(store)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::{Body, to_bytes};
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
 
     #[test]
     fn add_assigns_incrementing_ids_starting_at_one() {
@@ -225,5 +270,62 @@ mod tests {
     fn sorted_with_nothing_is_empty() {
         let list = TodoList::default();
         assert!(list.sorted().is_empty());
+    }
+
+    async fn get_index(store: &TodoStore) -> String {
+        let app = build_router(store.clone());
+        let res = app
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        String::from_utf8(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn index_renders_the_page() {
+        let store = new_store();
+        let body = get_index(&store).await;
+
+        assert!(body.contains("<title>Todos</title>"));
+        assert!(body.contains("todo-panel"));
+        assert!(body.contains("todo-list"));
+    }
+
+    #[tokio::test]
+    async fn index_lists_a_seeded_todo() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let body = get_index(&store).await;
+
+        assert!(body.contains("buy milk"));
+    }
+
+    #[tokio::test]
+    async fn index_shows_the_empty_state_when_there_are_no_todos() {
+        let store = new_store();
+        let body = get_index(&store).await;
+
+        assert!(body.contains("todo-empty"));
+        assert!(body.contains("Nothing on the list"));
+    }
+
+    #[tokio::test]
+    async fn index_shows_the_open_count() {
+        let store = new_store();
+        store.write().unwrap().add("a");
+        store.write().unwrap().add("b");
+        store.write().unwrap().toggle(1);
+
+        let body = get_index(&store).await;
+
+        assert!(body.contains("1 open"));
     }
 }

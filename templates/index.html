@@ -2,45 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Todos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=Geist+Mono:wght@400&display=swap"
+    >
     <script src="https://unpkg.com/htmx.org@4.0.0"></script>
+    <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/style.css">
-    <title>Greetings</title>
 </head>
 <body>
-    <div class="card">
-        <h1 class="card__title">👋 hello there</h1>
-        <p class="card__subtitle">type a name and pick a greeting</p>
-        <form class="form">
-            <input
-                class="form__input"
-                type="text"
-                name="name"
-                placeholder="Enter a name..."
-                autocomplete="off"
-            >
-            <div class="form__actions">
-                <button
-                    class="btn btn--hello"
-                    hx-get="/hello"
-                    hx-target="#result"
-                    hx-swap="innerHTML"
-                    hx-include="closest form"
-                >
-                    Say Hello
-                </button>
-                <button
-                    class="btn btn--goodbye"
-                    hx-get="/goodbye"
-                    hx-target="#result"
-                    hx-swap="innerHTML"
-                    hx-include="closest form"
-                >
-                    Say Goodbye
-                </button>
-            </div>
-        </form>
-        <div id="result" class="result"></div>
-    </div>
+    <main class="page">
+        <header class="page__head">
+            <h1 class="page__title">Todos</h1>
+            <p class="page__sub">One list, held in memory. Gone when the server stops.</p>
+        </header>
+{% include "todo_panel.html" %}
+    </main>
 </body>
 </html>

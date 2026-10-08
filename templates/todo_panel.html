@@ -1,0 +1,23 @@
+<div id="todo-panel" class="todo-panel">
+    <form class="todo-add" hx-post="/todos" hx-target="#todo-panel" hx-swap="outerHTML">
+        <label class="todo-label" for="todo-text">Add a todo</label>
+        <input
+            id="todo-text"
+            class="todo-input"
+            type="text"
+            name="text"
+            placeholder="What needs doing?"
+            autocomplete="off"
+            required
+        >
+        <button
+            type="submit"
+            class="todo-submit"
+            hx-disabled-elt="this"
+        >
+            Add
+        </button>
+    </form>
+{% include "todo_list.html" %}
+    <p class="todo-count" aria-live="polite">{{ self::open_count(&todos) }} open</p>
+</div>
