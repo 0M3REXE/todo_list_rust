@@ -308,6 +308,50 @@ mod tests {
         assert!(body.contains("buy milk"));
     }
 
+    /// The toggle checkbox must swap `#todo-list`, never `#todo-panel`.
+    /// Panel-wide swaps would re-render the add input and discard text the
+    /// user typed but had not yet submitted.
+    #[tokio::test]
+    async fn toggle_targets_the_list_not_the_panel() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let body = get_index(&store).await;
+
+        // The attributes sit on separate lines in the markup, so slice the
+        // whole rendered `<input>` element rather than one line of it. Match
+        // on `todo-toggle`, not `<input`: the add form's input comes first.
+        let checkbox = body
+            .split_once("todo-toggle")
+            .expect("checkbox rendered")
+            .1
+            .split_once('>')
+            .expect("input tag closed")
+            .0;
+
+        assert!(checkbox.contains("hx-target=\"#todo-list\""));
+        assert!(!checkbox.contains("#todo-panel"));
+    }
+
+    #[tokio::test]
+    async fn index_escapes_html_in_todo_text() {
+        let store = new_store();
+        store.write().unwrap().add("<script>alert(1)</script>");
+
+        let body = get_index(&store).await;
+
+        // Askama escapes angle brackets as numeric references (&#60; &#62;),
+        // not as the named entities &lt; &gt;. Either encoding is safe; what
+        // matters is that no raw tag reaches the browser.
+        let text_row = body
+            .lines()
+            .find(|line| line.contains("class=\"todo-text\""))
+            .expect("todo text rendered");
+
+        assert!(text_row.contains("&#60;script&#62;"));
+        assert!(!text_row.contains("<script>"));
+    }
+
     #[tokio::test]
     async fn index_shows_the_empty_state_when_there_are_no_todos() {
         let store = new_store();
