@@ -125,13 +125,31 @@ mod tests {
     }
 
     #[test]
-    fn add_rejects_blank_text() {
+    fn add_rejects_blank_text_without_consuming_an_id() {
         let mut list = TodoList::default();
 
         assert!(!list.add(""));
         assert!(!list.add("   "));
         assert!(!list.add("\t\n "));
         assert_eq!(list.len(), 0);
+        assert_eq!(list.next_id, 0, "a rejected add must not burn an id");
+    }
+
+    #[test]
+    fn a_stale_request_against_a_deleted_id_does_not_touch_another_todo() {
+        let mut list = TodoList::default();
+        list.add("a");
+        list.add("b");
+        list.delete(2);
+
+        // The id is gone and must never be reissued.
+        assert!(!list.toggle(2));
+        assert!(!list.delete(2));
+
+        list.add("c");
+        let ids: Vec<u64> = list.items.iter().map(|t| t.id).collect();
+        assert_eq!(ids, vec![1, 3]);
+        assert!(list.items.iter().all(|t| !t.done));
     }
 
     #[test]
@@ -179,11 +197,28 @@ mod tests {
         list.add("one");
         list.add("two");
         list.add("three");
+        list.add("four");
 
+        // Two completed, so the completed group's own order is exercised too.
         list.toggle(1);
+        list.toggle(2);
 
         let order: Vec<&str> = list.sorted().iter().map(|t| t.text.as_str()).collect();
-        assert_eq!(order, vec!["two", "three", "one"]);
+        assert_eq!(order, vec!["three", "four", "one", "two"]);
+    }
+
+    #[test]
+    fn sorted_does_not_mutate_the_stored_order() {
+        let mut list = TodoList::default();
+        list.add("one");
+        list.add("two");
+        list.toggle(1);
+
+        list.sorted();
+
+        // Ordering is a render-time concern; storage order is untouched.
+        let stored: Vec<&str> = list.items.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(stored, vec!["one", "two"]);
     }
 
     #[test]
