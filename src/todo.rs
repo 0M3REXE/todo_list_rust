@@ -158,10 +158,48 @@ async fn create(
     Ok(Html(TodoPanelTemplate { todos }.render()?))
 }
 
+/// Locks the store, applies `mutate`, and renders the list fragment.
+/// `mutate` returns false when the id was not found, which becomes a 404
+/// whose body is still the current list.
+fn with_list<F>(store: &TodoStore, mutate: F) -> Result<Response, AppError>
+where
+    F: FnOnce(&mut TodoList) -> bool,
+{
+    let (found, todos) = {
+        let mut list = store.write().expect("lock poisoned");
+        let found = mutate(&mut list);
+        (found, list.sorted())
+    };
+
+    let body = TodoListTemplate { todos }.render()?;
+    let status = if found {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    };
+    Ok((status, Html(body)).into_response())
+}
+
+async fn toggle(
+    State(store): State<TodoStore>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Result<Response, AppError> {
+    with_list(&store, |list| list.toggle(id))
+}
+
+async fn delete(
+    State(store): State<TodoStore>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Result<Response, AppError> {
+    with_list(&store, |list| list.delete(id))
+}
+
 pub fn build_router(store: TodoStore) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/todos", axum::routing::post(create))
+        .route("/todos/{id}/toggle", axum::routing::post(toggle))
+        .route("/todos/{id}/delete", axum::routing::post(delete))
         .with_state(store)
 }
 
@@ -498,5 +536,137 @@ mod tests {
 
         assert!(text_row.contains("&#60;script&#62;"));
         assert!(!text_row.contains("<script>"));
+    }
+
+    async fn post_to(store: &TodoStore, uri: &str) -> (StatusCode, String) {
+        let app = build_router(store.clone());
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = res.status();
+        let text = String::from_utf8(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        (status, text)
+    }
+
+    #[tokio::test]
+    async fn toggle_marks_a_todo_done() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let (status, body) = post_to(&store, "/todos/1/toggle").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("todo-row--done"));
+        assert!(body.contains("checked"));
+    }
+
+    #[tokio::test]
+    async fn toggle_returns_only_the_list_fragment() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let (_, body) = post_to(&store, "/todos/1/toggle").await;
+
+        // No add form — that is the point of the second swap target.
+        assert!(!body.contains("<!DOCTYPE html>"));
+        assert!(!body.contains("todo-input"));
+        assert!(body.contains("todo-list"));
+    }
+
+    #[tokio::test]
+    async fn toggle_twice_returns_to_undone() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        post_to(&store, "/todos/1/toggle").await;
+        let (status, body) = post_to(&store, "/todos/1/toggle").await;
+
+        // The status matters: without it the negative assertion below would
+        // also hold against a 404 from an unregistered route.
+        assert_eq!(status, StatusCode::OK);
+        assert!(!body.contains("todo-row--done"));
+    }
+
+    #[tokio::test]
+    async fn delete_removes_a_todo() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let (status, body) = post_to(&store, "/todos/1/delete").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(!body.contains("buy milk"));
+        assert!(body.contains("todo-empty"));
+        assert_eq!(store.read().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn unknown_id_is_404_with_the_current_list_as_the_body() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let (status, body) = post_to(&store, "/todos/9999/toggle").await;
+
+        // Honest status. htmx 4 swaps 4xx by default, so the list renders unchanged.
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(body.contains("buy milk"));
+    }
+
+    #[tokio::test]
+    async fn unknown_id_delete_is_404_and_leaves_state_alone() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let (status, _) = post_to(&store, "/todos/9999/delete").await;
+
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(store.read().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn non_numeric_id_is_rejected_by_the_path_extractor() {
+        let store = new_store();
+        let app = build_router(store);
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/todos/abc/toggle")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn completed_sorts_below_active_in_the_rendered_fragment() {
+        let store = new_store();
+        store.write().unwrap().add("one");
+        store.write().unwrap().add("two");
+        store.write().unwrap().add("three");
+
+        let (_, body) = post_to(&store, "/todos/1/toggle").await;
+
+        let one = body.find(">one<").expect("one rendered");
+        let two = body.find(">two<").expect("two rendered");
+        let three = body.find(">three<").expect("three rendered");
+        assert!(two < one, "two should precede the completed one");
+        assert!(three < one, "the completed one should sort last");
     }
 }
