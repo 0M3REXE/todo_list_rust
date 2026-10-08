@@ -1,0 +1,54 @@
+/* Hallmark · macrostructure: none (single-screen app, no hero/nav/footer)
+ * tone: austere · anchor hue: 250 · genre: modern-minimal
+ * pre-emit critique: P4 H4 E4 S4 R5 V3
+ * contrast: pass — ink 15.76:1 · body 11.26:1 · muted 6.82:1 · accent 4.93:1 */
+
+:root {
+  /* Colour — cool anchored neutrals, never #000 or #fff, one accent */
+  --color-paper: oklch(98.5% 0.004 250);
+  --color-ink: oklch(24% 0.02 258);
+  --color-body: oklch(34% 0.018 257);
+  --color-muted: oklch(46% 0.014 255);
+  --color-rule: oklch(88% 0.006 252);
+  --color-rule-strong: oklch(78% 0.008 254);
+  --color-accent: oklch(54% 0.20 256);
+  --color-danger: oklch(56% 0.17 25);
+  --color-hover: oklch(96% 0.006 250);
+
+  /* Type — two families: Geist for everything, Geist Mono as the outlier */
+  --font-body: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* Scale — major third 1.25 from a 16px base, five sizes only */
+  --text-xs: 0.64rem;
+  --text-sm: 0.8rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+
+  /* Space — 4pt base, named by role */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+
+  /* Easing — named only, never browser-default ease */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Duration — Hallmark timing canon */
+  --dur-press: 100ms;
+  --dur-hover: 180ms;
+  --dur-swap: 300ms;
+  --dur-reduced: 150ms;
+
+  /* Rules and radii — drawn with a ruler, not a blur */
+  --rule-hairline: 1px;
+  --radius-input: 6px;
+  --radius-button: 6px;
+}
