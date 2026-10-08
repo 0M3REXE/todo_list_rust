@@ -11,6 +11,8 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod todo;
+
 // --- Error handling ---
 // A single error type every handler can return. Converts any Askama render
 // failure into a clean 500 instead of panicking the request.
