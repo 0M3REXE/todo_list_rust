@@ -8,19 +8,21 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=Geist+Mono:wght@400&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
     >
-    <script src="https://unpkg.com/htmx.org@4.0.0"></script>
-    <link rel="stylesheet" href="/static/tokens.css">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/vendor/bulma.min.css">
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/vendor/htmx.min.js" defer></script>
 </head>
-<body>
-    <main class="page">
-        <header class="page__head">
-            <h1 class="page__title">Todos</h1>
-            <p class="page__sub">One list, held in memory. Gone when the server stops.</p>
-        </header>
+<body class="has-gradient-page">
+    <main class="section">
+        <div class="container is-max-desktop">
+<header class="page__head has-gradient-sheen">
+                <h1 class="title is-3 page__title">Todos</h1>
+                <p class="subtitle is-6 page__sub">One list, held in memory. Gone when the server stops.</p>
+            </header>
 {% include "todo_panel.html" %}
+        </div>
     </main>
 </body>
 </html>

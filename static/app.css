@@ -1,0 +1,214 @@
+/* Theme layer over Bulma.
+ *
+ * Bulma is the whole design system: layout, components, spacing scale, and
+ * dark mode come from it. This file only does three things Bulma cannot:
+ *
+ *   1. Re-hues Bulma's HSL variables to this project's accent.
+ *   2. Adds gradient utilities. Bulma has no gradient primitive — gradients
+ *      are plain `background-image`, so they never fight the framework.
+ *   3. Styles `todo-list`, which has no Bulma equivalent.
+ *
+ * Bulma exposes its palette as HSL triplets rather than finished colours, so
+ * overriding hue/saturation/lightness re-derives every dependent token —
+ * button, link, focus ring, tag — instead of patching them one by one.
+ */
+
+:root {
+  /* Accent: violet. An 18° gap from Bulma's default turquoise reads as a
+   * deliberate choice rather than a stock theme. */
+  --bulma-primary-h: 258deg;
+  --bulma-primary-s: 78%;
+  --bulma-primary-l: 54%;
+
+  /* Bulma links to `primary-h` on its own; without this, links stay teal
+   * while buttons turn violet. */
+  --bulma-link-h: 258deg;
+  --bulma-link-s: 78%;
+  --bulma-link-l: 54%;
+
+  /* Rounds Bulma's pill-shaped defaults down to a flatter, more editorial
+   * radius. Applied via .button/.input/.box overrides below because Bulma
+   * reads its radius variables at build time, not from the cascade. */
+  --todo-radius: 10px;
+
+  --gradient-accent: linear-gradient(
+    135deg,
+    hsl(258deg 78% 58%) 0%,
+    hsl(276deg 72% 62%) 100%
+  );
+  --gradient-sheen: linear-gradient(
+    180deg,
+    hsl(0deg 0% 100% / 0.14) 0%,
+    hsl(0deg 0% 100% / 0) 60%
+  );
+  /* Page gradient is built from Bulma's own scheme variables rather than
+   * fixed HSL, so it inverts with Bulma's dark mode automatically. Hardcoded
+   * stops would leave a dark card sitting on a dark page under `prefers-color-scheme`. */
+  --gradient-page: linear-gradient(
+    180deg,
+    var(--bulma-scheme-main-ter) 0%,
+    var(--bulma-scheme-main-bis) 100%
+  );
+}
+
+/* --- Squared-off radii ---------------------------------------------------- */
+
+.button,
+.input,
+.box,
+.card {
+  border-radius: var(--todo-radius);
+}
+
+/* --- Gradient utilities --------------------------------------------------- */
+
+/* Applies the accent gradient to any element. Pair with a matching text
+ * colour class; Bulma will not set one for you. */
+.has-gradient-accent {
+  background-image: var(--gradient-accent);
+  border: none;
+  color: hsl(0deg 0% 100%);
+}
+
+.has-gradient-accent:hover:not([disabled]) {
+  background-image: linear-gradient(
+    135deg,
+    hsl(258deg 78% 52%) 0%,
+    hsl(276deg 72% 56%) 100%
+  );
+  color: hsl(0deg 0% 100%);
+}
+
+/* Sits above a gradient to give it depth. Cheaper than a second gradient
+ * stop and keeps the accent's hue in one place. */
+.has-gradient-sheen::after {
+  background-image: var(--gradient-sheen);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+/* Tinted page background. Replaces Bulma's flat scheme-main. The element
+ * needs `position: relative` for .has-gradient-sheen to anchor against. */
+.has-gradient-page {
+  background-image: var(--gradient-page);
+  min-height: 100vh;
+  position: relative;
+}
+
+/* --- Page ----------------------------------------------------------------- */
+
+.page__head {
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.page__title {
+  letter-spacing: -0.02em;
+}
+
+.todo-panel {
+  overflow: hidden;
+  position: relative;
+}
+
+/* --- Add form ------------------------------------------------------------- */
+
+.todo-add .button {
+  font-weight: 600;
+}
+
+/* Bulma's `is-expanded` control makes the input fill the row; the adjacent
+ * Add button must not stretch with it. */
+.todo-add .control:last-child .button {
+  height: 100%;
+}
+
+/* --- List ----------------------------------------------------------------- */
+
+.todo-list {
+  margin-bottom: 0.75rem;
+}
+
+.todo-row {
+  align-items: center;
+  border-bottom: 1px solid hsl(0deg 0% 0% / 0.06);
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.25rem;
+  transition: background-color 150ms ease;
+}
+
+.todo-row:last-child {
+  border-bottom: none;
+}
+
+.todo-row:hover {
+  background-color: hsl(0deg 0% 50% / 0.04);
+}
+
+/* Hitting the row — not just the 1rem checkbox — should toggle the todo.
+ * htmx reads `hx-post` off whatever element carries it, so the attributes
+ * stay on the input and the label wrapper does the hit-testing. */
+.todo-row label.checkbox {
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.todo-text {
+  overflow-wrap: anywhere;
+  transition: color 150ms ease;
+}
+
+.todo-row--done .todo-text {
+  color: hsl(0deg 0% 50% / 0.5);
+  text-decoration: line-through;
+}
+
+.todo-empty {
+  padding: 2rem 0.5rem;
+}
+
+.todo-count {
+  border-top: 1px solid hsl(0deg 0% 0% / 0.06);
+  padding-top: 0.75rem;
+}
+
+/* --- Mobile ---------------------------------------------------------------
+ * Bulma is mobile-first, so the rules above are the phone layout and anything
+ * here is the desktop adjustment. 769px is Bulma's own tablet breakpoint.
+ * The only real gap is the tap target: a bare checkbox is ~1rem square, which
+ * is well under the 44px minimum touch target. On touch widths the label grows
+ * to fill the row so the whole line toggles; on desktop it shrinks back to
+ * the checkbox itself so the row does not look like a giant button.
+ */
+
+@media screen and (max-width: 768px) {
+  .todo-row {
+    padding: 0.75rem 0.25rem;
+  }
+
+  .todo-row label.checkbox {
+    align-self: stretch;
+    flex: 1 1 auto;
+  }
+
+  /* Padding on the input, not the label, so the hit area grows without
+   * pushing the tick off-centre. */
+  .todo-row label.checkbox input {
+    height: 100%;
+    padding: 0.6rem 0;
+  }
+}
+
+/* --- Reduced motion ------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-row,
+  .todo-text {
+    transition: none;
+  }
+}
