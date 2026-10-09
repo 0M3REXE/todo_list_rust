@@ -8,7 +8,8 @@ askama = "0.16.0"
 axum = "0.8.9"
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.4", features = ["full"] }
-tower-http = { version = "0.7.0", features = ["trace", "fs"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7.0", features = ["trace", "fs", "compression-gzip", "set-header", "timeout", "catch-panic"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 

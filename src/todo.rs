@@ -10,23 +10,70 @@ use axum::{
 };
 
 // --- Error handling ---
-// One error type every handler returns. Converts any Askama render failure
-// into a clean 500 instead of panicking the request.
+// One error type every handler returns. Renders every failure as a plain 500
+// with a fixed body: the cause goes to the log, never to the client.
 
-pub struct AppError(askama::Error);
+#[derive(Debug)]
+pub enum AppError {
+    Render(askama::Error),
+    LockPoisoned,
+}
+
+impl AppError {
+    fn into_response_inner(self) -> Response {
+        match &self {
+            Self::Render(err) => tracing::error!(?err, "template render failed"),
+            Self::LockPoisoned => tracing::error!("store lock poisoned"),
+        }
+        (StatusCode::INTERNAL_SERVER_ERROR, "something went wrong").into_response()
+    }
+}
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Render(err) => write!(f, "template render failed: {err}"),
+            Self::LockPoisoned => f.write_str("store lock poisoned"),
+        }
+    }
+}
+
+impl std::error::Error for AppError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Render(err) => Some(err),
+            Self::LockPoisoned => None,
+        }
+    }
+}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        tracing::error!(error = ?self.0, "template render failed");
-        (StatusCode::INTERNAL_SERVER_ERROR, "something went wrong").into_response()
+        self.into_response_inner()
     }
 }
 
 impl From<askama::Error> for AppError {
     fn from(err: askama::Error) -> Self {
-        AppError(err)
+        Self::Render(err)
     }
 }
+
+/// A poisoned lock means a previous request panicked mid-write, so the data
+/// inside may be inconsistent. Refusing to serve beats serving garbage, and a
+/// 500 beats taking the whole process down with `.expect`.
+fn read_lock(store: &TodoStore) -> Result<std::sync::RwLockReadGuard<'_, TodoList>, AppError> {
+    store.read().map_err(|_| AppError::LockPoisoned)
+}
+
+fn write_lock(store: &TodoStore) -> Result<std::sync::RwLockWriteGuard<'_, TodoList>, AppError> {
+    store.write().map_err(|_| AppError::LockPoisoned)
+}
+
+// --- Limits ---
+
+pub const MAX_TODOS: usize = 1_000;
+pub const MAX_TEXT_LEN: usize = 280;
 
 // --- Model ---
 
@@ -46,12 +93,14 @@ pub struct TodoList {
 }
 
 impl TodoList {
-    /// Trims the text and pushes it. Returns false and changes nothing
-    /// when the text is blank — `<input required>` already blocks that in
-    /// the browser, so this is defense-in-depth.
+    /// Trims the text and pushes it. Returns false and changes nothing when
+    /// the text is blank, over `MAX_TEXT_LEN`, or the list is full.
     pub fn add(&mut self, text: &str) -> bool {
         let text = text.trim();
-        if text.is_empty() {
+        if text.is_empty() || text.len() > MAX_TEXT_LEN {
+            return false;
+        }
+        if self.items.len() >= MAX_TODOS {
             return false;
         }
         self.next_id += 1;
@@ -137,7 +186,7 @@ struct TodoListTemplate {
 // --- Handlers ---
 
 async fn index(State(store): State<TodoStore>) -> Result<Html<String>, AppError> {
-    let todos = store.read().expect("lock poisoned").sorted();
+    let todos = read_lock(&store)?.sorted();
     Ok(Html(IndexTemplate { todos }.render()?))
 }
 
@@ -151,7 +200,7 @@ async fn create(
     axum::extract::Form(form): axum::extract::Form<NewTodo>,
 ) -> Result<Html<String>, AppError> {
     let todos = {
-        let mut list = store.write().expect("lock poisoned");
+        let mut list = write_lock(&store)?;
         list.add(&form.text);
         list.sorted()
     };
@@ -166,7 +215,7 @@ where
     F: FnOnce(&mut TodoList) -> bool,
 {
     let (found, todos) = {
-        let mut list = store.write().expect("lock poisoned");
+        let mut list = write_lock(store)?;
         let found = mutate(&mut list);
         (found, list.sorted())
     };
@@ -237,6 +286,68 @@ mod tests {
         assert!(!list.add("\t\n "));
         assert_eq!(list.len(), 0);
         assert_eq!(list.next_id, 0, "a rejected add must not burn an id");
+    }
+
+    #[test]
+    fn add_refuses_to_exceed_the_max_todo_count() {
+        let mut list = TodoList::default();
+        for i in 0..MAX_TODOS {
+            assert!(list.add(&format!("todo {i}")), "add {i} should fit");
+        }
+
+        assert!(
+            !list.add("one too many"),
+            "the cap must reject the overflow"
+        );
+        assert_eq!(list.len(), MAX_TODOS);
+
+        // A rejected add must not consume an id, same as a blank one.
+        assert_eq!(list.next_id, MAX_TODOS as u64);
+    }
+    #[test]
+    fn deleting_frees_a_slot_at_the_cap() {
+        let mut list = TodoList::default();
+        for i in 0..MAX_TODOS {
+            list.add(&format!("todo {i}"));
+        }
+        assert!(!list.add("blocked"));
+
+        assert!(list.delete(1));
+        assert!(list.add("now it fits"));
+        assert_eq!(list.len(), MAX_TODOS);
+    }
+    #[test]
+    fn add_rejects_text_longer_than_the_limit() {
+        let mut list = TodoList::default();
+
+        let at_limit = "a".repeat(MAX_TEXT_LEN);
+        assert!(list.add(&at_limit), "exactly at the limit must be allowed");
+
+        let over_limit = "a".repeat(MAX_TEXT_LEN + 1);
+        assert!(!list.add(&over_limit), "one char over must be rejected");
+        assert_eq!(list.len(), 1);
+    }
+    #[test]
+    fn the_length_limit_is_measured_after_trimming() {
+        let mut list = TodoList::default();
+
+        let padded = format!("{}   ", "a".repeat(MAX_TEXT_LEN));
+        assert!(list.add(&padded));
+        assert_eq!(list.items[0].text.len(), MAX_TEXT_LEN);
+    }
+    #[test]
+    fn the_template_advertises_the_same_limit_it_enforces() {
+        let panel = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/templates/todo_panel.html"
+        ))
+        .expect("panel template readable");
+
+        assert!(
+            panel.contains(&format!("maxlength=\"{MAX_TEXT_LEN}\"")),
+            "input must carry maxlength={MAX_TEXT_LEN} so the browser agrees \
+             with the server"
+        );
     }
 
     #[test]
@@ -457,6 +568,23 @@ mod tests {
         (status, text)
     }
 
+    async fn get_to(store: &TodoStore, uri: &str) -> (StatusCode, String) {
+        let app = build_router(store.clone());
+        let res = app
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = res.status();
+        let text = String::from_utf8(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        (status, text)
+    }
+
     #[tokio::test]
     async fn create_appends_a_todo() {
         let store = new_store();
@@ -584,6 +712,79 @@ mod tests {
         assert!(!body.contains("<!DOCTYPE html>"));
         assert!(!body.contains("todo-input"));
         assert!(body.contains("todo-list"));
+    }
+
+    /// A poisoned lock is a server fault, not a crash. The response must be a
+    /// 500 whose body says nothing about why, so the cause lands in the log
+    /// where it belongs.
+    #[tokio::test]
+    async fn a_poisoned_lock_yields_a_500_not_a_panic() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        // Poison it: panic while the guard is alive.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = store.write().unwrap();
+            panic!("poison the lock");
+        }));
+
+        let (status, body) = get_to(&store, "/").await;
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(
+            !body.contains("poison") && !body.contains("panicked"),
+            "the response must not leak internals: {body}"
+        );
+    }
+
+    /// Every handler must survive a poisoned lock, not just the read path.
+    #[tokio::test]
+    async fn a_poisoned_lock_yields_a_500_on_every_route() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = store.write().unwrap();
+            panic!("poison the lock");
+        }));
+
+        let (read_status, _) = get_to(&store, "/").await;
+        assert_eq!(
+            read_status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "GET / must not panic on a poisoned lock"
+        );
+
+        for uri in ["/todos/1/toggle", "/todos/1/delete"] {
+            let (status, _) = post_to(&store, uri).await;
+            assert_eq!(
+                status,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "{uri} must not panic on a poisoned lock"
+            );
+        }
+    }
+
+    /// An unmatched path is a client error, and gets a real 404 — not axum's
+    /// bare empty response.
+    #[tokio::test]
+    async fn an_unknown_path_returns_404() {
+        let store = new_store();
+        let (status, _) = get_to(&store, "/no-such-route").await;
+
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    /// `GET /todos/1/toggle` is a real route with the wrong verb, so it is a
+    /// 405 rather than a 404 — and must not fall through to the 404 handler.
+    #[tokio::test]
+    async fn a_wrong_method_on_a_known_path_returns_405() {
+        let store = new_store();
+        store.write().unwrap().add("buy milk");
+
+        let (status, _) = get_to(&store, "/todos/1/toggle").await;
+
+        assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[tokio::test]
