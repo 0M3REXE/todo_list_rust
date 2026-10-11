@@ -1,5 +1,11 @@
-mod todo;
+//! # The executable — wiring only
+//!
+//! Real work lives in the `practice` library. This loads `.env`, sets up
+//! tracing, opens the pool, applies migrations, builds the router, and serves.
+//! Middleware order is deliberate: the last `.layer()` call is outermost, so
+//! CatchPanic sees a panic first and Compression wraps the final response.
 
+use practice::todo;
 use std::time::Duration;
 
 use axum::{
@@ -18,6 +24,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
+    // sqlx's macros read .env at compile time; the running process still needs
+    // it, so load the same file here rather than requiring an exported variable.
+    dotenvy::dotenv().ok();
+
     let addr = std::env::var("ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_owned());
     tracing_subscriber::registry()
         .with(
@@ -25,6 +35,8 @@ async fn main() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let pool = connect_pool().await;
 
     // Scoped to ServeDir on purpose: on the whole app it would mark the HTML
     // immutable too.
@@ -35,7 +47,7 @@ async fn main() {
         ))
         .service(ServeDir::new("static"));
 
-    let app = todo::build_router(todo::new_store())
+    let app = todo::build_router(pool)
         .route("/healthz", get(|| async { "ok" }))
         .nest_service("/static", any_service(static_files))
         .layer(CompressionLayer::new())
@@ -89,6 +101,42 @@ async fn main() {
         tracing::error!(?err, "server error");
         std::process::exit(1);
     }
+}
+
+/// Opens the pool and applies any pending migrations.
+///
+/// `sqlx::migrate!` embeds `migrations/` at compile time, so a deploy needs no
+/// separate migration step. A failure here is fatal: serving reads against a
+/// schema the app does not recognise would fail later, less clearly.
+async fn connect_pool() -> sqlx::PgPool {
+    let url = match std::env::var("DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            tracing::error!("DATABASE_URL is not set");
+            std::process::exit(1);
+        }
+    };
+
+    let pool = match sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .acquire_timeout(std::time::Duration::from_secs(5))
+        .connect(&url)
+        .await
+    {
+        Ok(pool) => pool,
+        Err(err) => {
+            tracing::error!(?err, "could not connect to the database");
+            std::process::exit(1);
+        }
+    };
+
+    if let Err(err) = sqlx::migrate!().run(&pool).await {
+        tracing::error!(?err, "migrations failed");
+        std::process::exit(1);
+    }
+
+    tracing::info!("database ready");
+    pool
 }
 
 #[cfg(not(unix))]

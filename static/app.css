@@ -163,6 +163,14 @@
   transition: color 150ms ease;
 }
 
+/* Bulma's `.delete` is a ~1.25rem circle, far under a 44px touch target, so it
+ * grows on mobile below. `flex: 0 0 auto` keeps it from being squeezed by a
+ * long todo text. */
+.todo-delete {
+  flex: 0 0 auto;
+  margin: 0 0.25rem;
+}
+
 .todo-row--done .todo-text {
   color: hsl(0deg 0% 50% / 0.5);
   text-decoration: line-through;
@@ -201,6 +209,18 @@
   .todo-row label.checkbox input {
     height: 100%;
     padding: 0.6rem 0;
+  }
+
+  /* The delete circle grows to a real touch target, and the row breathes a
+   * little wider to make room for it. */
+  .todo-delete {
+    height: 2.5rem;
+    padding: 0;
+    width: 2.5rem;
+  }
+
+  .todo-row {
+    padding: 0.75rem 0.5rem;
   }
 }
 

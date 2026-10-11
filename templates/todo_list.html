@@ -13,6 +13,14 @@
             <span class="is-sr-only">Mark as {% if todo.done %}not done{% else %}done{% endif %}</span>
         </label>
         <span class="todo-text">{{ todo.text }}</span>
+        <button
+            class="todo-delete delete"
+            hx-post="/todos/{{ todo.id }}/delete"
+            hx-target="#todo-list"
+            hx-swap="outerHTML"
+            hx-confirm="Delete this todo?"
+            aria-label="Delete {{ todo.text }}"
+        ></button>
     </li>
 {% else %}
     <li class="todo-empty has-text-centered has-text-grey is-italic">Nothing on the list. Type above and press Enter.</li>
