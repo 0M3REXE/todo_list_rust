@@ -1,15 +1,15 @@
 //! # The todo domain — module front door
 //!
 //! Holds the shared types and re-exports the submodules, so callers write
-//! `todo::build_router`. Split by concern: `error`, `store` (all SQL),
-//! `templates`, `handlers`. Walkthrough: `docs/architecture.md`.
+//! `todo::build_router`. Split by concern: `store` (all SQL), `templates`,
+//! `handlers`. The error type used to live here as `todo/error.rs`; it moved to
+//! `src/error.rs` when authentication needed one too.
+//! Walkthrough: `docs/architecture.md`.
 
-mod error;
 mod handlers;
 mod store;
 mod templates;
 
-pub use error::AppError;
 pub use handlers::build_router;
 pub use store::{MAX_TEXT_LEN, add, flip_done, open_count, remove, sorted};
 

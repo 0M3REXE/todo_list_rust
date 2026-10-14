@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Log in</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+    >
+    <link rel="stylesheet" href="/static/vendor/bulma.min.css">
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/password-toggle.js" defer></script>
+</head>
+<body class="has-gradient-page">
+    <main class="section">
+        <div class="container is-max-desktop">
+            <div class="columns is-centered">
+                <div class="column is-half-tablet is-one-third-desktop">
+                    <div class="box">
+                        <h1 class="title is-4">Log in</h1>
+
+                        {% if let Some(message) = error %}
+                        <div class="notification is-danger is-light" role="alert">{{ message }}</div>
+                        {% endif %}
+
+                        <form method="post" action="/login">
+                            <input type="hidden" name="next" value="{{ next }}">
+                            <div class="field">
+                                <label class="label" for="email">Email</label>
+                                <div class="control">
+                                    <input
+                                        class="input"
+                                        type="email"
+                                        id="email"
+                                        name="email"
+                                        autocomplete="username"
+                                        required
+                                        autofocus
+                                    >
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="password">Password</label>
+                                <div class="control">
+                                    <input
+                                        class="input"
+                                        type="password"
+                                        id="password"
+                                        name="password"
+                                        autocomplete="current-password"
+                                        required
+                                    >
+                                </div>
+                                <button
+                                    class="button is-small is-text"
+                                    type="button"
+                                    data-password-toggle
+                                    aria-pressed="false"
+                                >Show</button>
+                            </div>
+                            <div class="field">
+                                <div class="control">
+                                    <button class="button is-primary is-fullwidth" type="submit">
+                                        Log in
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <p class="has-text-centered mt-4">
+                            <a href="/signup">Create an account</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

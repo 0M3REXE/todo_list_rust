@@ -2,22 +2,23 @@
 //!
 //! Real work lives in the `practice` library. This loads `.env`, sets up
 //! tracing, opens the pool, applies migrations, builds the router, and serves.
+//! The router itself comes from `app::build_app` so that the test suite drives
+//! the same routes, session layer and login guard that `cargo run` does.
+//!
 //! Middleware order is deliberate: the last `.layer()` call is outermost, so
 //! CatchPanic sees a panic first and Compression wraps the final response.
+//! The session and auth layers are already inside `build_app`, so they sit
+//! *below* everything applied here — see the diagram in `src/app.rs`.
 
-use practice::todo;
+use practice::{app, auth::PostgresStore};
 use std::time::Duration;
 
-use axum::{
-    http::{
-        HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_SECURITY_POLICY, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS},
-    },
-    routing::{any_service, get},
+use axum::http::{
+    HeaderValue, StatusCode,
+    header::{CONTENT_SECURITY_POLICY, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS},
 };
-use tower::ServiceBuilder;
 use tower_http::{
-    catch_panic::CatchPanicLayer, compression::CompressionLayer, services::ServeDir,
+    catch_panic::CatchPanicLayer, compression::CompressionLayer,
     set_header::SetResponseHeaderLayer, timeout::TimeoutLayer, trace::TraceLayer,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -37,19 +38,24 @@ async fn main() {
         .init();
 
     let pool = connect_pool().await;
+    let config = app::AppConfig::from_env();
 
-    // Scoped to ServeDir on purpose: on the whole app it would mark the HTML
-    // immutable too.
-    let static_files = ServiceBuilder::new()
-        .layer(SetResponseHeaderLayer::overriding(
-            CACHE_CONTROL,
-            HeaderValue::from_static("public, max-age=31536000, immutable"),
-        ))
-        .service(ServeDir::new("static"));
+    // A misconfigured mailer is fatal here rather than at the first reset
+    // request: SMTP_HOST set but MAIL_FROM missing must not silently fall back
+    // to printing reset links into a production log.
+    let mailer = match practice::mailer::from_env() {
+        Ok(mailer) => mailer,
+        Err(reason) => {
+            tracing::error!(%reason, "mail configuration is unusable");
+            std::process::exit(1);
+        }
+    };
 
-    let app = todo::build_router(pool)
-        .route("/healthz", get(|| async { "ok" }))
-        .nest_service("/static", any_service(static_files))
+    // Started before the listener so a boot-time database problem is caught
+    // here rather than on the first request that needs a session.
+    let cleanup = app::spawn_session_cleanup(PostgresStore::new(pool.clone()));
+
+    let app = app::build_app_with(pool, config, mailer)
         .layer(CompressionLayer::new())
         .layer(SetResponseHeaderLayer::overriding(
             CONTENT_SECURITY_POLICY,
@@ -94,10 +100,15 @@ async fn main() {
         Err(err) => tracing::warn!(?err, "listening, but local_addr failed"),
     }
 
-    if let Err(err) = axum::serve(listener, app)
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
-        .await
-    {
+        .await;
+
+    // The listener has closed; nothing else can arrive, so the cleanup task can
+    // be told to finish instead of being killed with the process.
+    cleanup.stop().await;
+
+    if let Err(err) = served {
         tracing::error!(?err, "server error");
         std::process::exit(1);
     }

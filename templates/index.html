@@ -18,9 +18,38 @@
     <main class="section">
         <div class="container is-max-desktop">
 <header class="page__head has-gradient-sheen">
-                <h1 class="title is-3 page__title">Todos</h1>
-                <p class="subtitle is-6 page__sub">One list, held in memory. Gone when the server stops.</p>
+                <div class="level">
+                    <div class="level-left">
+                        <div>
+                            <h1 class="title is-3 page__title">Todos</h1>
+                            <p class="subtitle is-6 page__sub">
+                                Signed in as <strong>{{ email }}</strong>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        {# Logout is a POST so another site cannot end this session
+                           with an <img src="/logout">; a plain link would allow it. #}
+                        <form method="post" action="/logout">
+                            <button class="button is-small" type="submit">Log out</button>
+                        </form>
+                        <a class="button is-small" href="/account/password">Account</a>
+                    </div>
+                </div>
             </header>
+{# The banner only appears when the app is configured to require verification
+               and this account has not confirmed yet. `needs_verification` is
+               computed in the handler, so the template carries no policy. #}
+{% if needs_verification %}
+            <div class="notification is-warning" role="status">
+                <p class="mb-2">
+                    <strong>Confirm your email address</strong> to start using your list.
+                </p>
+                <form method="post" action="/verify-email">
+                    <button class="button is-small" type="submit">Send another link</button>
+                </form>
+            </div>
+{% endif %}
 {% include "todo_panel.html" %}
         </div>
     </main>

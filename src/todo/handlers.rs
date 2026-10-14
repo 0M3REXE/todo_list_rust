@@ -1,29 +1,55 @@
 //! # HTTP layer — 4 handlers + router
 //!
-//! Handlers take axum extractors (`State`, `Path`, `Form`) and return
-//! `Result<_, AppError>`. `Path(id): Path<i64>` rejects a non-numeric id before
-//! any SQL runs. Three of the four return fragments, not pages — htmx swaps
-//! them into the page.
+//! Handlers take axum extractors (`State`, `Path`, `Form`, `CurrentUser`) and
+//! return `Result<_, AppError>`. `Path(id): Path<i64>` rejects a non-numeric id
+//! before any SQL runs. Three of the four return fragments, not pages — htmx
+//! swaps them into the page.
+//!
+//! Every handler starts with `CurrentUser`, which is how a todo gets tied to
+//! the account that owns it. There is no route here that can reach the store
+//! without one.
 
 use askama::Template as _;
 use axum::{
     Router,
     extract::{Path, State},
     http::StatusCode,
+    middleware,
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use sqlx::PgPool;
 
 use super::{
-    AppError, TodoStore,
+    TodoStore,
     store::{add, flip_done, open_count, remove, sorted},
     templates::{IndexTemplate, ListTemplate, PanelTemplate},
 };
+use crate::AppError;
+use crate::auth::CurrentUser;
 
-async fn index(State(pool): State<TodoStore>) -> Result<Html<String>, AppError> {
-    let (todos, open_count) = (sorted(&pool).await?, open_count(&pool).await?);
-    Ok(Html(IndexTemplate { todos, open_count }.render()?))
+async fn index(
+    State(pool): State<TodoStore>,
+    axum::Extension(config): axum::Extension<std::sync::Arc<crate::app::AppConfig>>,
+    CurrentUser(user): CurrentUser,
+) -> Result<Html<String>, AppError> {
+    let (todos, open_count) = (
+        sorted(&pool, user.id).await?,
+        open_count(&pool, user.id).await?,
+    );
+    // Read what is needed before moving `user.email` out, or the borrow below
+    // would be of a value that has already been partially moved.
+    let needs_verification = config.require_email_verification && !user.is_verified();
+
+    Ok(Html(
+        IndexTemplate {
+            todos,
+            open_count,
+            email: user.email,
+            needs_verification,
+        }
+        .render()?,
+    ))
 }
 
 #[derive(serde::Deserialize)]
@@ -33,23 +59,27 @@ struct NewTodo {
 
 async fn create(
     State(pool): State<TodoStore>,
+    CurrentUser(user): CurrentUser,
     axum::extract::Form(form): axum::extract::Form<NewTodo>,
 ) -> Result<Html<String>, AppError> {
-    add(&pool, &form.text).await?;
-    let (todos, open_count) = (sorted(&pool).await?, open_count(&pool).await?);
+    add(&pool, user.id, &form.text).await?;
+    let (todos, open_count) = (
+        sorted(&pool, user.id).await?,
+        open_count(&pool, user.id).await?,
+    );
     Ok(Html(PanelTemplate { todos, open_count }.render()?))
 }
 
 /// Runs `mutate`, then renders the list fragment. `mutate` returns false when
-/// the id was not found, which becomes a 404 whose body is still the current
-/// list.
-async fn with_list<F>(pool: &PgPool, mutate: F) -> Result<Response, AppError>
+/// the id was not found **for this user**, which becomes a 404 whose body is
+/// still the current list.
+async fn with_list<F>(pool: &PgPool, user_id: i64, mutate: F) -> Result<Response, AppError>
 where
     F: std::future::Future<Output = Result<bool, AppError>>,
 {
     let found = mutate.await?;
     let body = ListTemplate {
-        todos: sorted(pool).await?,
+        todos: sorted(pool, user_id).await?,
     }
     .render()?;
     let status = if found {
@@ -60,19 +90,36 @@ where
     Ok((status, Html(body)).into_response())
 }
 
-async fn toggle(State(pool): State<TodoStore>, Path(id): Path<i64>) -> Result<Response, AppError> {
-    with_list(&pool, flip_done(&pool, id)).await
+async fn toggle(
+    State(pool): State<TodoStore>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<i64>,
+) -> Result<Response, AppError> {
+    with_list(&pool, user.id, flip_done(&pool, user.id, id)).await
 }
 
-async fn delete(State(pool): State<TodoStore>, Path(id): Path<i64>) -> Result<Response, AppError> {
-    with_list(&pool, remove(&pool, id)).await
+async fn delete(
+    State(pool): State<TodoStore>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<i64>,
+) -> Result<Response, AppError> {
+    with_list(&pool, user.id, remove(&pool, user.id, id)).await
 }
 
+/// The todo routes, already behind the login guard.
+///
+/// `route_layer` applies to every route defined in this router and no others,
+/// so the todo pages require a session while `/login` and `/signup` — merged in
+/// separately by `src/app.rs` — stay reachable. A new todo route added here is
+/// protected automatically; forgetting to guard it is not a mistake you can
+/// make.
 pub fn build_router(pool: TodoStore) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/todos", axum::routing::post(create))
         .route("/todos/{id}/toggle", axum::routing::post(toggle))
         .route("/todos/{id}/delete", axum::routing::post(delete))
+        .route_layer(middleware::from_fn(crate::auth::require_verified))
+        .route_layer(middleware::from_fn(crate::auth::require_auth))
         .with_state(pool)
 }

@@ -6,4 +6,12 @@
 //!
 //! Full walkthrough: `docs/architecture.md`.
 
+mod error;
+
+pub mod app;
+pub mod auth;
+pub mod mailer;
 pub mod todo;
+
+pub use app::AppConfig;
+pub use error::AppError;

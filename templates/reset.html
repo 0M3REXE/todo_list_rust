@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Reset your password</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+    >
+    <link rel="stylesheet" href="/static/vendor/bulma.min.css">
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/password-toggle.js" defer></script>
+</head>
+<body class="has-gradient-page">
+    <main class="section">
+        <div class="container is-max-desktop">
+            <div class="columns is-centered">
+                <div class="column is-half-tablet is-one-third-desktop">
+                    <div class="box">
+                        <h1 class="title is-4">Choose a new password</h1>
+
+                        {% if let Some(message) = error %}
+                        <div class="notification is-danger is-light" role="alert">{{ message }}</div>
+                        {% endif %}
+
+                        <form method="post" action="/reset/{{ token }}">
+                            <input type="hidden" name="token" value="{{ token }}">
+                            <div class="field">
+                                <label class="label" for="new_password">New password</label>
+                                <div class="control">
+                                    <input
+                                        class="input"
+                                        type="password"
+                                        id="new_password"
+                                        name="new_password"
+                                        autocomplete="new-password"
+                                        minlength="8"
+                                        required
+                                        autofocus
+                                    >
+                                    <p class="help">At least 8 characters.</p>
+                                </div>
+                                <button
+                                    class="button is-small is-text"
+                                    type="button"
+                                    data-password-toggle
+                                    aria-pressed="false"
+                                >Show</button>
+                            </div>
+                            <div class="field">
+                                <label class="label" for="new_password_confirm">Confirm new password</label>
+                                <div class="control">
+                                    <input
+                                        class="input"
+                                        type="password"
+                                        id="new_password_confirm"
+                                        name="new_password_confirm"
+                                        autocomplete="new-password"
+                                        required
+                                    >
+                                </div>
+                                <button
+                                    class="button is-small is-text"
+                                    type="button"
+                                    data-password-toggle
+                                    aria-pressed="false"
+                                >Show</button>
+                            </div>
+                            <div class="field">
+                                <div class="control">
+                                    <button class="button is-primary is-fullwidth" type="submit">
+                                        Set password
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
