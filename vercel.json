@@ -5,5 +5,9 @@
       "src": "server.rs",
       "use": "@vercel/rust"
     }
+  ],
+  "routes": [
+    { "src": "/static/(.*)", "dest": "/server" },
+    { "src": "/(.*)", "dest": "/server" }
   ]
 }
