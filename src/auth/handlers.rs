@@ -1,4 +1,4 @@
-//! # Auth handlers — signup, login, logout
+//! # HTTP layer — signup, login, logout, account
 //!
 //! These are plain HTML forms: POST, then either a 303 to a new page or the
 //! same page re-rendered with a message. No htmx, because a swapped login page
@@ -16,12 +16,12 @@ use axum::{
     routing::{get, post},
 };
 use serde::Deserialize;
-use sqlx::PgPool;
 
 use super::{
     AuthBackend, AuthSession, CurrentUser, User, middleware::safe_next, password, store, templates,
 };
 use crate::AppError;
+use crate::db::Db;
 
 /// Every way a login can fail says the same thing. Naming the half that was
 /// wrong — "no such email" — is enough to enumerate every account on the site.
@@ -61,7 +61,7 @@ struct SignupForm {
 }
 
 async fn signup(
-    State(pool): State<PgPool>,
+    State(db): State<Db>,
     mut session: AuthSession,
     Form(form): Form<SignupForm>,
 ) -> Result<Response, AppError> {
@@ -78,7 +78,7 @@ async fn signup(
 
     let hash = password::hash(form.password).await?;
 
-    let Some(user) = store::create_user(&pool, &email, &hash).await? else {
+    let Some(user) = store::create_user(&db, &email, &hash).await? else {
         return Ok(render_signup_error(
             &email,
             "That email is already registered.",
@@ -221,10 +221,10 @@ async fn logout(mut session: AuthSession) -> Result<Response, AppError> {
 // --- account: change password, log out everywhere --------------------------
 
 async fn account_form(
-    State(pool): State<PgPool>,
+    State(db): State<Db>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Html<String>, AppError> {
-    let sessions = store::count_sessions_for_user(&pool, user.id).await?;
+    let sessions = store::count_sessions_for_user(&db, user.id).await?;
     Ok(Html(
         templates::AccountTemplate {
             email: user.email,
@@ -244,7 +244,7 @@ struct PasswordForm {
 }
 
 async fn change_password(
-    State(pool): State<PgPool>,
+    State(db): State<Db>,
     mut session: AuthSession,
     CurrentUser(user): CurrentUser,
     Form(form): Form<PasswordForm>,
@@ -253,7 +253,7 @@ async fn change_password(
     // differ should not cost a 50ms Argon2 verification.
     let rejection = match check_new_password(&form) {
         Err(message) => Err(message),
-        Ok(()) => check_current_password(&pool, &user, &form.current_password).await,
+        Ok(()) => check_current_password(&db, &user, &form.current_password).await,
     };
 
     if let Err(message) = rejection {
@@ -261,7 +261,7 @@ async fn change_password(
     }
 
     let hash = password::hash(form.new_password).await?;
-    if !store::set_password(&pool, user.id, &hash).await? {
+    if !store::set_password(&db, user.id, &hash).await? {
         return Ok(render_account_error(
             &user,
             "That account no longer exists.",
@@ -277,7 +277,7 @@ async fn change_password(
     // hash of the *old* password, and issuing a session from it would store a
     // value that no longer matches what the next request computes - which signs
     // the person straight back out again.
-    let refreshed = User::new(user.id, user.email.clone(), user.email_verified_at, &hash);
+    let refreshed = User::new(user.id, user.email.clone(), &hash);
 
     session
         .session
@@ -303,12 +303,16 @@ fn check_new_password(form: &PasswordForm) -> Result<(), String> {
 ///
 /// This is the step that stops a walk-up attacker using an unlocked browser to
 /// take over the account. The email alone is not enough.
-async fn check_current_password(pool: &PgPool, user: &User, current: &str) -> Result<(), String> {
-    let stored = sqlx::query_scalar::<_, String>("SELECT password_hash FROM users WHERE id = $1")
-        .bind(user.id)
-        .fetch_one(pool)
-        .await
-        .map_err(|err| err.to_string())?;
+async fn check_current_password(db: &Db, user: &User, current: &str) -> Result<(), String> {
+    let stored = crate::db::opt_query(
+        db,
+        "select password_hash from users where id = ?1",
+        vec![crate::db::pi(user.id)],
+        |row| crate::db::rs(row, 0),
+    )
+    .await
+    .map_err(|err| err.to_string())?
+    .ok_or_else(|| "That account no longer exists.".to_owned())?;
 
     match password::verify(current.to_owned(), stored).await {
         true => Ok(()),
@@ -321,7 +325,7 @@ async fn check_current_password(pool: &PgPool, user: &User, current: &str) -> Re
 /// The current session is re-issued first so the visitor keeps this device;
 /// everything else is deleted, which is the entire point of the button.
 async fn logout_everywhere(
-    State(pool): State<PgPool>,
+    State(db): State<Db>,
     mut session: AuthSession,
     CurrentUser(user): CurrentUser,
 ) -> Result<Response, AppError> {
@@ -332,7 +336,7 @@ async fn logout_everywhere(
         .map_err(raw_session_error)?;
     session.login(&user).await.map_err(session_error)?;
 
-    let removed = store::delete_sessions_for_user(&pool, user.id).await?;
+    let removed = store::delete_sessions_for_user(&db, user.id).await?;
     tracing::info!(user.id = user.id, removed, "logged out everywhere");
 
     Ok(Redirect::to("/account/password?logged_out=1").into_response())
@@ -371,20 +375,20 @@ fn raw_session_error(err: axum_login::tower_sessions::session::Error) -> AppErro
 
 /// The unauthenticated half of the app, mounted without any guard.
 ///
-/// Takes the pool and applies it with `with_state`, so what comes back is a
-/// plain `Router` that `src/app.rs` can merge with the todo routes. The merge
-/// itself is what places the session layer above them.
+/// Takes the database connection and applies it with `with_state`, so what
+/// comes back is a plain `Router` that `src/app.rs` can merge with the todo
+/// routes. The merge itself is what places the session layer above them.
 ///
 /// Callers merge this in and add the session layer on top; `src/app.rs` shows
 /// the whole arrangement.
-pub fn routes(pool: PgPool) -> Router {
+pub fn routes(db: Db) -> Router {
     Router::new()
         .route("/signup", get(signup_form).post(signup))
         .route("/login", get(login_form).post(login))
         // POST only. A GET logout would let a third-party page end someone's
         // session with an `<img src>`.
         .route("/logout", post(logout))
-        .with_state(pool)
+        .with_state(db)
 }
 
 /// The pages that need a session but are about the account rather than the
@@ -393,10 +397,10 @@ pub fn routes(pool: PgPool) -> Router {
 /// They are guarded here rather than there because that router is about todos.
 /// The guard is the same middleware either way — there is one login check in
 /// the app, not two that could drift apart.
-pub fn account_routes(pool: PgPool) -> Router {
+pub fn account_routes(db: Db) -> Router {
     Router::new()
         .route("/account/password", get(account_form).post(change_password))
         .route("/account/logout-everywhere", post(logout_everywhere))
         .route_layer(axum::middleware::from_fn(super::require_auth))
-        .with_state(pool)
+        .with_state(db)
 }

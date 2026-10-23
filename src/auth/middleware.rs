@@ -1,7 +1,6 @@
 //! # Two middlewares: "you must be logged in", and "this POST is not a forgery"
 
 use axum::{
-    Extension,
     extract::{Request, State},
     http::{HeaderMap, Method, StatusCode, header},
     middleware::Next,
@@ -37,40 +36,6 @@ pub async fn require_auth(req: Request, next: Next) -> Response {
     // Remember where they were headed so the login page can send them back.
     let target = format!("/login?next={}", encode_query_value(req.uri().path()));
     Redirect::to(&target).into_response()
-}
-
-/// Rejects a request from an account whose address is not confirmed, when the
-/// app is configured to require that.
-///
-/// Placed on the todo routes so an unverified account can still log in, read the
-/// banner and ask for another link — but cannot touch the list. Blocking at the
-/// door instead would make the email the only key to the account, so a forgotten
-/// password would become a permanent lockout.
-///
-/// Only applies to state-changing requests. Rendering the page that explains
-/// the problem is the whole point of letting them in at all.
-pub async fn require_verified(
-    axum::Extension(config): axum::Extension<std::sync::Arc<crate::app::AppConfig>>,
-    Extension(session): Extension<AuthSession>,
-    req: Request,
-    next: Next,
-) -> Response {
-    if !config.require_email_verification || !is_state_changing(req.method()) {
-        return next.run(req).await;
-    }
-
-    let verified = session.user.as_ref().is_some_and(|user| user.is_verified());
-
-    if verified {
-        return next.run(req).await;
-    }
-
-    tracing::warn!("blocked an unverified account from changing data");
-    (
-        StatusCode::FORBIDDEN,
-        "Confirm your email address before using your list.",
-    )
-        .into_response()
 }
 
 /// Rejects state-changing requests that arrive from another site.

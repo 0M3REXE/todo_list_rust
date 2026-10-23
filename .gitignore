@@ -2,5 +2,6 @@
 /.superpowers
 .env
 /.sqlx
-/docs
 /tests
+# local dev database
+practice.db

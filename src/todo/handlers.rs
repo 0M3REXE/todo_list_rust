@@ -18,7 +18,6 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::get,
 };
-use sqlx::PgPool;
 
 use super::{
     TodoStore,
@@ -29,24 +28,20 @@ use crate::AppError;
 use crate::auth::CurrentUser;
 
 async fn index(
-    State(pool): State<TodoStore>,
-    axum::Extension(config): axum::Extension<std::sync::Arc<crate::app::AppConfig>>,
+    State(db): State<TodoStore>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Html<String>, AppError> {
     let (todos, open_count) = (
-        sorted(&pool, user.id).await?,
-        open_count(&pool, user.id).await?,
+        sorted(&db, user.id).await?,
+        open_count(&db, user.id).await?,
     );
     // Read what is needed before moving `user.email` out, or the borrow below
     // would be of a value that has already been partially moved.
-    let needs_verification = config.require_email_verification && !user.is_verified();
-
     Ok(Html(
         IndexTemplate {
             todos,
             open_count,
             email: user.email,
-            needs_verification,
         }
         .render()?,
     ))
@@ -58,14 +53,14 @@ struct NewTodo {
 }
 
 async fn create(
-    State(pool): State<TodoStore>,
+    State(db): State<TodoStore>,
     CurrentUser(user): CurrentUser,
     axum::extract::Form(form): axum::extract::Form<NewTodo>,
 ) -> Result<Html<String>, AppError> {
-    add(&pool, user.id, &form.text).await?;
+    add(&db, user.id, &form.text).await?;
     let (todos, open_count) = (
-        sorted(&pool, user.id).await?,
-        open_count(&pool, user.id).await?,
+        sorted(&db, user.id).await?,
+        open_count(&db, user.id).await?,
     );
     Ok(Html(PanelTemplate { todos, open_count }.render()?))
 }
@@ -73,13 +68,13 @@ async fn create(
 /// Runs `mutate`, then renders the list fragment. `mutate` returns false when
 /// the id was not found **for this user**, which becomes a 404 whose body is
 /// still the current list.
-async fn with_list<F>(pool: &PgPool, user_id: i64, mutate: F) -> Result<Response, AppError>
+async fn with_list<F>(db: &TodoStore, user_id: i64, mutate: F) -> Result<Response, AppError>
 where
     F: std::future::Future<Output = Result<bool, AppError>>,
 {
     let found = mutate.await?;
     let body = ListTemplate {
-        todos: sorted(pool, user_id).await?,
+        todos: sorted(db, user_id).await?,
     }
     .render()?;
     let status = if found {
@@ -91,19 +86,19 @@ where
 }
 
 async fn toggle(
-    State(pool): State<TodoStore>,
+    State(db): State<TodoStore>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<i64>,
 ) -> Result<Response, AppError> {
-    with_list(&pool, user.id, flip_done(&pool, user.id, id)).await
+    with_list(&db, user.id, flip_done(&db, user.id, id)).await
 }
 
 async fn delete(
-    State(pool): State<TodoStore>,
+    State(db): State<TodoStore>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<i64>,
 ) -> Result<Response, AppError> {
-    with_list(&pool, user.id, remove(&pool, user.id, id)).await
+    with_list(&db, user.id, remove(&db, user.id, id)).await
 }
 
 /// The todo routes, already behind the login guard.
@@ -113,13 +108,12 @@ async fn delete(
 /// separately by `src/app.rs` — stay reachable. A new todo route added here is
 /// protected automatically; forgetting to guard it is not a mistake you can
 /// make.
-pub fn build_router(pool: TodoStore) -> Router {
+pub fn build_router(db: TodoStore) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/todos", axum::routing::post(create))
         .route("/todos/{id}/toggle", axum::routing::post(toggle))
         .route("/todos/{id}/delete", axum::routing::post(delete))
-        .route_layer(middleware::from_fn(crate::auth::require_verified))
         .route_layer(middleware::from_fn(crate::auth::require_auth))
-        .with_state(pool)
+        .with_state(db)
 }

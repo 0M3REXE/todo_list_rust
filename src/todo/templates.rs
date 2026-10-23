@@ -16,9 +16,6 @@ pub(crate) struct IndexTemplate {
     /// Shown in the header next to the logout button, so there is no doubt
     /// which account the list belongs to on a shared machine.
     pub(crate) email: String,
-    /// True only when the app requires verification and this account has not
-    /// confirmed. The policy lives in the handler, not the template.
-    pub(crate) needs_verification: bool,
 }
 
 #[derive(Template)]

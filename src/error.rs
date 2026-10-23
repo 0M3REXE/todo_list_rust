@@ -13,19 +13,18 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use libsql::Error as SqlError;
 
 #[derive(Debug)]
 pub enum AppError {
     Render(askama::Error),
-    Database(sqlx::Error),
+    Database(SqlError),
     /// The blocking-pool task that hashes a password did not finish. In practice
     /// this means the hashing library panicked, which it does not.
     Hashing(tokio::task::JoinError),
     /// The session layer refused to save, load or clear. Holds the library's
     /// own message, already rendered with `Display`.
     Session(String),
-    /// Outbound mail could not be handed to the transport.
-    Mail(String),
     /// A handler asked who is logged in and got nobody. `require_auth` should
     /// have redirected first, so reaching this is a bug rather than a user
     /// error — it fails closed with a 401 instead of pretending it is fine.
@@ -39,7 +38,6 @@ impl AppError {
             Self::Database(err) => tracing::error!(?err, "database query failed"),
             Self::Hashing(err) => tracing::error!(?err, "password hashing failed"),
             Self::Session(message) => tracing::error!(%message, "session operation failed"),
-            Self::Mail(message) => tracing::error!(%message, "mail delivery failed"),
             Self::Unauthenticated => {
                 tracing::warn!("handler ran without a logged-in user; is require_auth mounted?");
             }
@@ -60,7 +58,6 @@ impl std::fmt::Display for AppError {
             Self::Database(err) => write!(f, "database query failed: {err}"),
             Self::Hashing(err) => write!(f, "password hashing failed: {err}"),
             Self::Session(message) => write!(f, "session operation failed: {message}"),
-            Self::Mail(message) => write!(f, "mail delivery failed: {message}"),
             Self::Unauthenticated => write!(f, "no user is logged in"),
         }
     }
@@ -73,7 +70,7 @@ impl std::error::Error for AppError {
             Self::Database(err) => Some(err),
             Self::Hashing(err) => Some(err),
             // A String has no inner error to walk to.
-            Self::Session(_) | Self::Mail(_) | Self::Unauthenticated => None,
+            Self::Session(_) | Self::Unauthenticated => None,
         }
     }
 }
@@ -90,8 +87,8 @@ impl From<askama::Error> for AppError {
     }
 }
 
-impl From<sqlx::Error> for AppError {
-    fn from(err: sqlx::Error) -> Self {
+impl From<SqlError> for AppError {
+    fn from(err: SqlError) -> Self {
         Self::Database(err)
     }
 }

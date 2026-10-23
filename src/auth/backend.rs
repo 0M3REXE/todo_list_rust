@@ -5,9 +5,11 @@
 //! nothing else. Everything about *how* sessions are stored is axum-login's
 //! problem, not ours.
 
-use sqlx::PgPool;
+use libsql::Error;
 
 use axum_login::{AuthUser, AuthnBackend};
+
+use crate::db::Db;
 
 use super::{User, password, store};
 
@@ -21,22 +23,22 @@ pub struct Credentials {
     pub password: String,
 }
 
-/// The user's side of the pair: a pool to answer questions with.
+/// The user's side of the pair: a database connection to answer questions with.
 #[derive(Clone)]
 pub struct AuthBackend {
-    pub pool: PgPool,
+    pub db: Db,
 }
 
 impl AuthnBackend for AuthBackend {
     type User = User;
     type Credentials = Credentials;
-    type Error = sqlx::Error;
+    type Error = Error;
 
     async fn authenticate(
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let found = store::find_by_email(&self.pool, creds.email.trim()).await?;
+        let found = store::find_by_email(&self.db, creds.email.trim()).await?;
 
         // Hash either the real password hash or a throwaway one, so that a
         // missing account and a wrong password take the same time.
@@ -55,7 +57,7 @@ impl AuthnBackend for AuthBackend {
     }
 
     async fn get_user(&self, user_id: &i64) -> Result<Option<Self::User>, Self::Error> {
-        let found = store::find_by_id(&self.pool, *user_id).await?;
+        let found = store::find_by_id(&self.db, *user_id).await?;
         Ok(found.map(store::UserRow::into_user))
     }
 }

@@ -37,19 +37,6 @@
                     </div>
                 </div>
             </header>
-{# The banner only appears when the app is configured to require verification
-               and this account has not confirmed yet. `needs_verification` is
-               computed in the handler, so the template carries no policy. #}
-{% if needs_verification %}
-            <div class="notification is-warning" role="status">
-                <p class="mb-2">
-                    <strong>Confirm your email address</strong> to start using your list.
-                </p>
-                <form method="post" action="/verify-email">
-                    <button class="button is-small" type="submit">Send another link</button>
-                </form>
-            </div>
-{% endif %}
 {% include "todo_panel.html" %}
         </div>
     </main>

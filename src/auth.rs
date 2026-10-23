@@ -1,13 +1,12 @@
 //! # The auth domain — module front door
 //!
 //! Holds `User`, the aliases, and re-exports the submodules, so callers write
-//! `auth::AuthSession` and `auth::PostgresStore`. Split by concern: `store`
-//! (all SQL), `password`, `backend` (the axum-login traits), `middleware`,
+//! `auth::AuthSession` and `auth::DbStore`. Split by concern: `store` (all
+//! SQL), `password`, `backend` (the axum-login traits), `middleware`,
 //! `handlers`, `templates`.
 
 mod backend;
 mod handlers;
-pub mod link;
 pub mod middleware;
 pub mod password;
 mod store;
@@ -15,19 +14,17 @@ mod templates;
 
 pub use backend::{AuthBackend, Credentials};
 pub use handlers::{account_routes, routes};
-pub use middleware::{require_auth, require_verified, safe_next, verify_origin};
+pub use middleware::{require_auth, safe_next, verify_origin};
 pub use password::{MAX_PASSWORD_LEN, MIN_PASSWORD_LEN};
 pub use store::{
-    PostgresStore, Purpose, count_sessions_for_user, create_user, delete_sessions_for_user,
-    delete_tokens, find_user, hash_token, last_token_sent_at, mark_email_verified, put_token,
-    set_password, take_token, user_id_by_email,
+    DbStore, count_sessions_for_user, create_user, delete_sessions_for_user, find_user,
+    set_password, user_id_by_email,
 };
 
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum_login::AuthSession as AxumLoginSession;
 use sha2::{Digest, Sha256};
-use time::OffsetDateTime;
 
 use crate::AppError;
 
@@ -43,21 +40,14 @@ use crate::AppError;
 pub struct User {
     pub id: i64,
     pub email: String,
-    pub email_verified_at: Option<OffsetDateTime>,
     auth_hash: Vec<u8>,
 }
 
 impl User {
-    pub(crate) fn new(
-        id: i64,
-        email: String,
-        email_verified_at: Option<OffsetDateTime>,
-        password_hash: &str,
-    ) -> Self {
+    pub(crate) fn new(id: i64, email: String, password_hash: &str) -> Self {
         Self {
             id,
             email,
-            email_verified_at,
             auth_hash: Sha256::digest(password_hash.as_bytes()).to_vec(),
         }
     }
@@ -72,16 +62,6 @@ pub type AuthSession = AxumLoginSession<AuthBackend>;
 /// read the account id back out of that payload to fill in `sessions.user_id`.
 /// Naming it here means the writer and the reader cannot drift apart.
 pub const AUTH_DATA_KEY: &str = "practice.auth";
-
-impl User {
-    /// Whether the address has been confirmed.
-    ///
-    /// An account with no confirmed address may still exist — verification is
-    /// only enforced when `REQUIRE_EMAIL_VERIFICATION` is on.
-    pub fn is_verified(&self) -> bool {
-        self.email_verified_at.is_some()
-    }
-}
 
 /// The logged-in user, as a handler argument.
 ///

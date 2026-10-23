@@ -1,0 +1,9 @@
+target/
+.env
+.env.*
+tests/
+docs/
+./
+/.superpowers
+/.sqlx
+/.freebuff

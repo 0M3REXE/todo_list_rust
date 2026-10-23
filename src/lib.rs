@@ -10,7 +10,7 @@ mod error;
 
 pub mod app;
 pub mod auth;
-pub mod mailer;
+pub mod db;
 pub mod todo;
 
 pub use app::AppConfig;

@@ -13,13 +13,15 @@ mod templates;
 pub use handlers::build_router;
 pub use store::{MAX_TEXT_LEN, add, flip_done, open_count, remove, sorted};
 
-use sqlx::PgPool;
+use crate::db::Db;
 
-/// The pool is the store. Aliasing it keeps the handler signatures readable and
-/// gives the name a place to change if the storage does.
-pub type TodoStore = PgPool;
+/// The database connection is the store. Aliasing it keeps the handler
+/// signatures readable and gives the name a place to change if the storage
+/// does.
+pub type TodoStore = Db;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+/// One row of the list, as the templates receive it.
+#[derive(Debug, Clone)]
 pub struct Todo {
     pub id: i64,
     pub text: String,
