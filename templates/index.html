@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
     >
     <link rel="stylesheet" href="/static/vendor/bulma.min.css">
     <link rel="stylesheet" href="/static/app.css">
@@ -17,27 +17,26 @@
 <body class="has-gradient-page">
     <main class="section">
         <div class="container is-max-desktop">
-<header class="page__head has-gradient-sheen">
+            <header class="page__head">
                 <div class="level">
                     <div class="level-left">
                         <div>
-                            <h1 class="title is-3 page__title">Todos</h1>
-                            <p class="subtitle is-6 page__sub">
-                                Signed in as <strong>{{ email }}</strong>
-                            </p>
+                            <p class="page__sub">Your tasks · {{ email }}</p>
+                            <h1 class="page__title">Todos</h1>
                         </div>
                     </div>
                     <div class="level-right">
                         {# Logout is a POST so another site cannot end this session
                            with an <img src="/logout">; a plain link would allow it. #}
                         <form method="post" action="/logout">
-                            <button class="button is-small" type="submit">Log out</button>
+                            <button class="button is-small is-light" type="submit">Log out</button>
                         </form>
                         <a class="button is-small" href="/account/password">Account</a>
                     </div>
                 </div>
             </header>
-{% include "todo_panel.html" %}
+
+            {% include "todo_panel.html" %}
         </div>
     </main>
 </body>

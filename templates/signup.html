@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
     >
     <link rel="stylesheet" href="/static/vendor/bulma.min.css">
     <link rel="stylesheet" href="/static/app.css">
@@ -18,44 +18,42 @@
     <main class="section">
         <div class="container is-max-desktop">
             <div class="columns is-centered">
-                <div class="column is-half-tablet is-one-third-desktop">
-                    <div class="box">
-                        <h1 class="title is-4">Create an account</h1>
+                <div class="column is-half-tablet is-one-third-desktop auth-box">
+                    <h1 class="title">Create an account</h1>
 
-                        {% if let Some(message) = error %}
-                        <div class="notification is-danger is-light" role="alert">{{ message }}</div>
-                        {% endif %}
+                    {% if let Some(message) = error %}
+                    <div class="notification is-danger is-light" role="alert">{{ message }}</div>
+                    {% endif %}
 
-                        <form method="post" action="/signup">
-                            <div class="field">
-                                <label class="label" for="email">Email</label>
-                                <div class="control">
-                                    <input
-                                        class="input"
-                                        type="email"
-                                        id="email"
-                                        name="email"
-                                        autocomplete="username"
-                                        value="{{ email }}"
-                                        required
-                                        autofocus
-                                    >
-                                </div>
+                    <form method="post" action="/signup">
+                        <div class="field">
+                            <label class="label" for="email">Email</label>
+                            <div class="control">
+                                <input
+                                    class="input"
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    autocomplete="username"
+                                    value="{{ email }}"
+                                    required
+                                    autofocus
+                                >
                             </div>
-                            <div class="field">
-                                <label class="label" for="password">Password</label>
-                                <div class="control">
-                                    <input
-                                        class="input"
-                                        type="password"
-                                        id="password"
-                                        name="password"
-                                        autocomplete="new-password"
-                                        minlength="8"
-                                        required
-                                    >
-                                    <p class="help">At least 8 characters.</p>
-                                </div>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="password">Password</label>
+                            <div class="control">
+                                <input
+                                    class="input"
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    autocomplete="new-password"
+                                    minlength="8"
+                                    required
+                                >
+                                <p class="help">At least 8 characters.</p>
                                 <button
                                     class="button is-small is-text"
                                     type="button"
@@ -63,32 +61,32 @@
                                     aria-pressed="false"
                                 >Show</button>
                             </div>
-                            <div class="field">
-                                <label class="label" for="password_confirm">Confirm password</label>
-                                <div class="control">
-                                    <input
-                                        class="input"
-                                        type="password"
-                                        id="password_confirm"
-                                        name="password_confirm"
-                                        autocomplete="new-password"
-                                        required
-                                    >
-                                </div>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="password_confirm">Confirm password</label>
+                            <div class="control">
+                                <input
+                                    class="input"
+                                    type="password"
+                                    id="password_confirm"
+                                    name="password_confirm"
+                                    autocomplete="new-password"
+                                    required
+                                >
                             </div>
-                            <div class="field">
-                                <div class="control">
-                                    <button class="button is-primary is-fullwidth" type="submit">
-                                        Sign up
-                                    </button>
-                                </div>
+                        </div>
+                        <div class="field">
+                            <div class="control">
+                                <button class="button is-primary is-fullwidth" type="submit">
+                                    Sign up
+                                </button>
                             </div>
-                        </form>
+                        </div>
+                    </form>
 
-                        <p class="has-text-centered mt-4">
-                            <a href="/login">Already have an account? Log in</a>
-                        </p>
-                    </div>
+                    <p class="has-text-centered mt-4">
+                        <a href="/login">Already have an account? Log in</a>
+                    </p>
                 </div>
             </div>
         </div>

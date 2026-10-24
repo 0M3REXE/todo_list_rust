@@ -14,15 +14,17 @@
         </label>
         <span class="todo-text">{{ todo.text }}</span>
         <button
-            class="todo-delete delete"
+            class="todo-delete button is-danger is-small"
             hx-post="/todos/{{ todo.id }}/delete"
             hx-target="#todo-list"
             hx-swap="outerHTML"
             hx-confirm="Delete this todo?"
             aria-label="Delete {{ todo.text }}"
-        ></button>
+        >
+            Delete
+        </button>
     </li>
 {% else %}
-    <li class="todo-empty has-text-centered has-text-grey is-italic">Nothing on the list. Type above and press Enter.</li>
+    <li class="todo-empty">Nothing on the list. Type above and press Enter.</li>
 {% endfor %}
 </ul>

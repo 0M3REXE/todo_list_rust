@@ -1,5 +1,5 @@
 <div id="todo-panel" class="todo-panel box">
-    <form class="todo-add field has-addons" hx-post="/todos" hx-target="#todo-panel" hx-swap="outerHTML">
+    <form class="todo-add field" hx-post="/todos" hx-target="#todo-panel" hx-swap="outerHTML">
         <div class="control is-expanded">
             <label class="todo-label label is-sr-only" for="todo-text">Add a todo</label>
             <input
@@ -16,7 +16,7 @@
         <div class="control">
             <button
                 type="submit"
-                class="todo-submit button has-gradient-accent has-gradient-sheen"
+                class="todo-submit button is-primary is-fullwidth"
                 hx-disabled-elt="this"
             >
                 Add

@@ -1,49 +1,85 @@
-/* Theme layer over Bulma.
- *
- * Bulma is the whole design system: layout, components, spacing scale, and
- * dark mode come from it. This file only does three things Bulma cannot:
- *
- *   1. Re-hues Bulma's HSL variables to this project's accent.
- *   2. Adds gradient utilities. Bulma has no gradient primitive — gradients
- *      are plain `background-image`, so they never fight the framework.
- *   3. Styles `todo-list`, which has no Bulma equivalent.
- *
- * Bulma exposes its palette as HSL triplets rather than finished colours, so
- * overriding hue/saturation/lightness re-derives every dependent token —
- * button, link, focus ring, tag — instead of patching them one by one.
+/* Hallmark · macrostructure: Long Document · tone: luxury · anchor hue: warm-amber
+ * theme: Studio · paper: mid-dark · display: high-contrast-serif · accent: warm-amber
+ * studied: no · DNA-source: none
  */
 
+/* --- Hallmark design tokens (OKLCH) --------------------------------------- */
+
 :root {
-  /* Accent: violet. An 18° gap from Bulma's default turquoise reads as a
-   * deliberate choice rather than a stock theme. */
-  --bulma-primary-h: 258deg;
-  --bulma-primary-s: 78%;
-  --bulma-primary-l: 54%;
+  /* Paper band: mid-dark (~55% lightness) — refined, not stark white. */
+  --color-paper: oklch(82% 0.005 240);
+  --color-paper-inverse: oklch(12% 0.008 240);
+  --color-surface: oklch(90% 0.004 240);
 
-  /* Bulma links to `primary-h` on its own; without this, links stay teal
-   * while buttons turn violet. */
-  --bulma-link-h: 258deg;
-  --bulma-link-s: 78%;
-  --bulma-link-l: 54%;
+  /* Display / text */
+  --color-ink: oklch(20% 0.005 240);
+  --color-ink-muted: oklch(45% 0.006 240);
+  --color-ink-on-paper: oklch(95% 0.004 240);
 
-  /* Rounds Bulma's pill-shaped defaults down to a flatter, more editorial
-   * radius. Applied via .button/.input/.box overrides below because Bulma
-   * reads its radius variables at build time, not from the cascade. */
+  /* Accent: warm amber — luxury, not playful. */
+  --color-accent: oklch(72% 0.145 45);
+  --color-accent-hover: oklch(68% 0.16 45);
+  --color-accent-muted: oklch(78% 0.08 45);
+
+  /* State colours */
+  --color-success: oklch(75% 0.11 140);
+  --color-error: oklch(65% 0.18 25);
+  --color-focus: oklch(72% 0.145 45);
+
+  /* Typography */
+  --font-display: "Playfair Display", serif;
+  --font-body: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-display: clamp(2.5rem, 5vw + 1rem, 4.5rem);
+  --text-display-s: clamp(1.75rem, 4vw + 0.75rem, 2.75rem);
+  --text-section: clamp(1.5rem, 3vw + 0.5rem, 2rem);
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+
+  /* 4pt spacing scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in: cubic-bezier(0.42, 0, 1, 0.94);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --rule-hair: 1px solid oklch(0% 0% 0% / 0.06);
+}
+
+/* --- Bulma theme layer (preserved) ---------------------------------------- */
+
+:root {
+  --bulma-primary-h: 45deg;
+  --bulma-primary-s: 70%;
+  --bulma-primary-l: 52%;
+
+  --bulma-link-h: 45deg;
+  --bulma-link-s: 70%;
+  --bulma-link-l: 52%;
+
   --todo-radius: 10px;
 
   --gradient-accent: linear-gradient(
     135deg,
-    hsl(258deg 78% 58%) 0%,
-    hsl(276deg 72% 62%) 100%
+    oklch(72% 0.145 45) 0%,
+    oklch(68% 0.115 55) 100%
   );
   --gradient-sheen: linear-gradient(
     180deg,
-    hsl(0deg 0% 100% / 0.14) 0%,
-    hsl(0deg 0% 100% / 0) 60%
+    oklch(100% 0 0 / 0.12) 0%,
+    oklch(100% 0 0 / 0) 60%
   );
-  /* Page gradient is built from Bulma's own scheme variables rather than
-   * fixed HSL, so it inverts with Bulma's dark mode automatically. Hardcoded
-   * stops would leave a dark card sitting on a dark page under `prefers-color-scheme`. */
   --gradient-page: linear-gradient(
     180deg,
     var(--bulma-scheme-main-ter) 0%,
@@ -51,93 +87,108 @@
   );
 }
 
-/* --- Squared-off radii ---------------------------------------------------- */
+/* --- Base ----------------------------------------------------------------- */
 
-.button,
-.input,
-.box,
-.card {
-  border-radius: var(--todo-radius);
+html {
+  overflow-x: clip;
+}
+body {
+  overflow-x: clip;
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  line-height: 1.55;
 }
 
-/* --- Gradient utilities --------------------------------------------------- */
-
-/* Applies the accent gradient to any element. Pair with a matching text
- * colour class; Bulma will not set one for you. */
-.has-gradient-accent {
-  background-image: var(--gradient-accent);
-  border: none;
-  color: hsl(0deg 0% 100%);
+/* Luxury headings: serif, roman only — italic headers are banned. */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
 }
 
-.has-gradient-accent:hover:not([disabled]) {
-  background-image: linear-gradient(
-    135deg,
-    hsl(258deg 78% 52%) 0%,
-    hsl(276deg 72% 56%) 100%
-  );
-  color: hsl(0deg 0% 100%);
+h1 { font-size: var(--text-display); }
+h2 { font-size: var(--text-display-s); }
+h3 { font-size: var(--text-section); }
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-/* Sits above a gradient to give it depth. Cheaper than a second gradient
- * stop and keeps the accent's hue in one place. */
-.has-gradient-sheen::after {
-  background-image: var(--gradient-sheen);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-}
-
-/* Tinted page background. Replaces Bulma's flat scheme-main. The element
- * needs `position: relative` for .has-gradient-sheen to anchor against. */
-.has-gradient-page {
-  background-image: var(--gradient-page);
-  min-height: 100vh;
-  position: relative;
-}
-
-/* --- Page ----------------------------------------------------------------- */
+/* --- Page: Long Document macrostructure ---------------------------------- */
 
 .page__head {
-  margin-bottom: 1.5rem;
-  position: relative;
+  margin-bottom: var(--space-2xl);
+  border-bottom: var(--rule-hair);
+  padding-bottom: var(--space-lg);
 }
 
 .page__title {
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: var(--text-display);
+  letter-spacing: -0.03em;
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.page__sub {
+  color: var(--color-ink-muted);
+  font-size: var(--text-body);
+  margin: 0;
 }
 
 .todo-panel {
   overflow: hidden;
   position: relative;
+  border: var(--rule-hair);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
 }
 
 /* --- Add form ------------------------------------------------------------- */
 
-.todo-add .button {
-  font-weight: 600;
+.todo-add {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  align-items: flex-end;
 }
 
-/* Bulma's `is-expanded` control makes the input fill the row; the adjacent
- * Add button must not stretch with it. */
-.todo-add .control:last-child .button {
+.todo-add .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-add .button {
+  font-weight: 600;
   height: 100%;
 }
 
 /* --- List ----------------------------------------------------------------- */
 
 .todo-list {
-  margin-bottom: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .todo-row {
   align-items: center;
-  border-bottom: 1px solid hsl(0deg 0% 0% / 0.06);
+  border-bottom: var(--rule-hair);
   display: flex;
-  gap: 0.5rem;
-  padding: 0.6rem 0.25rem;
-  transition: background-color 150ms ease;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-sm);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
 }
 
 .todo-row:last-child {
@@ -145,12 +196,9 @@
 }
 
 .todo-row:hover {
-  background-color: hsl(0deg 0% 50% / 0.04);
+  background-color: oklch(0% 0% 0% / 0.03);
 }
 
-/* Hitting the row — not just the 1rem checkbox — should toggle the todo.
- * htmx reads `hx-post` off whatever element carries it, so the attributes
- * stay on the input and the label wrapper does the hit-testing. */
 .todo-row label.checkbox {
   cursor: pointer;
   display: flex;
@@ -160,75 +208,229 @@
 
 .todo-text {
   overflow-wrap: anywhere;
-  transition: color 150ms ease;
-}
-
-/* Bulma's `.delete` is a ~1.25rem circle, far under a 44px touch target, so it
- * grows on mobile below. `flex: 0 0 auto` keeps it from being squeezed by a
- * long todo text. */
-.todo-delete {
-  flex: 0 0 auto;
-  margin: 0 0.25rem;
+  transition: color var(--dur-base) var(--ease-out);
+  flex: 1;
+  min-width: 0;
 }
 
 .todo-row--done .todo-text {
-  color: hsl(0deg 0% 50% / 0.5);
+  color: var(--color-ink-muted);
   text-decoration: line-through;
 }
 
 .todo-empty {
-  padding: 2rem 0.5rem;
+  padding: var(--space-2xl) var(--space-sm);
+  color: var(--color-ink-muted);
+  text-align: center;
+  font-style: italic;
 }
 
 .todo-count {
-  border-top: 1px solid hsl(0deg 0% 0% / 0.06);
-  padding-top: 0.75rem;
+  border-top: var(--rule-hair);
+  padding-top: var(--space-md);
+  color: var(--color-ink-muted);
+  font-size: var(--text-small);
 }
 
-/* --- Mobile ---------------------------------------------------------------
- * Bulma is mobile-first, so the rules above are the phone layout and anything
- * here is the desktop adjustment. 769px is Bulma's own tablet breakpoint.
- * The only real gap is the tap target: a bare checkbox is ~1rem square, which
- * is well under the 44px minimum touch target. On touch widths the label grows
- * to fill the row so the whole line toggles; on desktop it shrinks back to
- * the checkbox itself so the row does not look like a giant button.
- */
+/* --- 8-state button ------------------------------------------------------- */
+
+.button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--text-body);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  touch-action: manipulation;
+}
+
+.button:not(:disabled):hover {
+  background-color: oklch(0% 0% 0% / 0.06);
+}
+
+.button:not(:disabled):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* State-only classes for the 8-state demo wrapper (not production UI). */
+.button.is-hover,
+.button.is-focus,
+.button.is-active {
+  background-color: oklch(0% 0% 0% / 0.08);
+}
+.button.is-disabled,
+.button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.button.is-loading {
+  color: transparent !important;
+}
+.button.is-loading::after {
+  content: "";
+  width: 1em;
+  height: 1em;
+  border: 2px solid oklch(0% 0% 0% / 0.2);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.button.is-error {
+  background-color: var(--color-error);
+  color: oklch(100% 0 0);
+}
+.button.is-success {
+  background-color: var(--color-success);
+  color: oklch(100% 0 0);
+}
+
+.button.is-primary {
+  background: var(--gradient-accent);
+  color: oklch(100% 0 0);
+  box-shadow: 0 2px 6px oklch(72% 0.145 45 / 0.25);
+}
+.button.is-primary:hover:not(:disabled) {
+  background-image: linear-gradient(
+    135deg,
+    oklch(68% 0.16 45) 0%,
+    oklch(62% 0.13 55) 100%
+  );
+}
+.button.is-danger {
+  background-color: var(--color-error);
+  color: oklch(100% 0 0);
+}
+.button.is-light {
+  background-color: oklch(0% 0% 0% / 0.04);
+  color: var(--color-ink);
+}
+.button.is-fullwidth {
+  width: 100%;
+}
+
+/* --- Mobile --------------------------------------------------------------- */
 
 @media screen and (max-width: 768px) {
-  .todo-row {
-    padding: 0.75rem 0.25rem;
+  .page__head {
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-md);
   }
-
+  .page__title {
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+  .todo-add {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .todo-add .input {
+    width: 100%;
+  }
   .todo-row label.checkbox {
     align-self: stretch;
     flex: 1 1 auto;
   }
-
-  /* Padding on the input, not the label, so the hit area grows without
-   * pushing the tick off-centre. */
   .todo-row label.checkbox input {
     height: 100%;
     padding: 0.6rem 0;
   }
-
-  /* The delete circle grows to a real touch target, and the row breathes a
-   * little wider to make room for it. */
   .todo-delete {
     height: 2.5rem;
     padding: 0;
     width: 2.5rem;
   }
-
   .todo-row {
     padding: 0.75rem 0.5rem;
   }
 }
 
-/* --- Reduced motion ------------------------------------------------------- */
-
 @media (prefers-reduced-motion: reduce) {
   .todo-row,
-  .todo-text {
+  .todo-text,
+  .button {
     transition: none;
   }
+  .button.is-loading::after {
+    animation: none;
+  }
 }
+
+/* --- Reduced radius for Bulma overrides ----------------------------------- */
+
+.button,
+.input,
+.box,
+.card {
+  border-radius: var(--todo-radius);
+}
+
+/* --- Gradient utilities (preserved) --------------------------------------- */
+
+.has-gradient-accent {
+  background-image: var(--gradient-accent);
+  border: none;
+  color: oklch(100% 0 0);
+}
+.has-gradient-accent:hover:not([disabled]) {
+  background-image: linear-gradient(
+    135deg,
+    oklch(68% 0.16 45) 0%,
+    oklch(62% 0.13 55) 100%
+  );
+  color: oklch(100% 0 0);
+}
+.has-gradient-sheen::after {
+  background-image: var(--gradient-sheen);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+.has-gradient-page {
+  background-image: var(--gradient-page);
+  min-height: 100vh;
+  position: relative;
+}
+
+/* --- Auth forms ----------------------------------------------------------- */
+
+.auth-box {
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.auth-box .title {
+  font-size: var(--text-section);
+  margin-bottom: var(--space-md);
+}
+
+.auth-box .field {
+  margin-bottom: var(--space-md);
+}
+
+.auth-box .button.is-primary {
+  width: 100%;
+}
+
+/* --- Stamp ---------------------------------------------------------------- */
+/* End of Hallmark token layer. All colours reference named tokens above. */
