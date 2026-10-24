@@ -21,7 +21,7 @@ use axum::{
 
 use super::{
     TodoStore,
-    store::{add, flip_done, open_count, remove, sorted},
+    store::{add, flip_done, remove, sorted, sorted_with_count},
     templates::{IndexTemplate, ListTemplate, PanelTemplate},
 };
 use crate::AppError;
@@ -31,13 +31,9 @@ async fn index(
     State(db): State<TodoStore>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Html<String>, AppError> {
-    // Both queries are independent — hit the database at the same time instead
-    // of waiting for one round trip before starting the next.
-    let (todos, open_count) = tokio::join!(
-        sorted(&db, user.id),
-        open_count(&db, user.id),
-    );
-    let (todos, open_count) = (todos?, open_count?);
+    // One query instead of two: the window function computes open_count
+    // alongside every todo row in a single database round trip.
+    let (todos, open_count) = sorted_with_count(&db, user.id).await?;
     // Read what is needed before moving `user.email` out, or the borrow below
     // would be of a value that has already been partially moved.
     Ok(Html(
@@ -61,10 +57,7 @@ async fn create(
     axum::extract::Form(form): axum::extract::Form<NewTodo>,
 ) -> Result<Html<String>, AppError> {
     add(&db, user.id, &form.text).await?;
-    let (todos, open_count) = (
-        sorted(&db, user.id).await?,
-        open_count(&db, user.id).await?,
-    );
+    let (todos, open_count) = sorted_with_count(&db, user.id).await?;
     Ok(Html(PanelTemplate { todos, open_count }.render()?))
 }
 

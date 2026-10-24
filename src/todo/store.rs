@@ -55,6 +55,39 @@ pub async fn sorted(db: &Db, user_id: i64) -> Result<Vec<Todo>, AppError> {
     .await?)
 }
 
+/// Returns the sorted todo list *and* the count of open todos in a single
+/// database round trip. The window function `sum(...) over ()` computes the
+/// open count alongside every row without a second scan or query.
+pub async fn sorted_with_count(
+    db: &Db,
+    user_id: i64,
+) -> Result<(Vec<Todo>, i64), AppError> {
+    let rows = db::query_all(
+        db,
+        "select id, text, done,
+               sum(case when done = 0 then 1 else 0 end) over () as open_count
+        from todos
+        where user_id = ?1
+        order by done asc, id asc",
+        vec![db::pi(user_id)],
+        |row| {
+            Ok((
+                Todo {
+                    id: db::ri(row, 0)?,
+                    text: db::rs(row, 1)?,
+                    done: db::rb(row, 2)?,
+                },
+                db::ri(row, 3)?,
+            ))
+        },
+    )
+    .await?;
+
+    let open_count = rows.first().map(|(_, count)| *count).unwrap_or(0);
+    let todos: Vec<Todo> = rows.into_iter().map(|(todo, _)| todo).collect();
+    Ok((todos, open_count))
+}
+
 pub async fn open_count(db: &Db, user_id: i64) -> Result<i64, AppError> {
     Ok(db::scalar_i64(
         db,
