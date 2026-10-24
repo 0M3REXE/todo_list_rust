@@ -1,6 +1,5 @@
-// Theme toggle — persists preference in localStorage, respects
-// prefers-color-scheme as the default, and applies a `data-theme`
-// attribute on <html> so CSS can switch palettes.
+// Theme toggle — light mode default, persists preference in localStorage,
+// applies `data-theme` attribute on <html> so CSS can switch palettes.
 
 (function () {
   var html = document.documentElement;
@@ -13,9 +12,8 @@
   var DARK = 'dark';
   var LIGHT = 'light';
 
-  // Icons
-  var ICON_DARK = '☀️';   // light mode is active → show sun (switch to light)
-  var ICON_LIGHT = '🌙';  // dark mode is active → show moon (switch to dark)
+  var ICON_DARK = '☀️';   // light mode active → show sun (switch to light)
+  var ICON_LIGHT = '🌙';  // dark mode active → show moon (switch to dark)
 
   function setTheme(theme) {
     if (theme === DARK) {
@@ -31,24 +29,9 @@
     }
   }
 
-  function getSystemTheme() {
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-      ? DARK
-      : LIGHT;
-  }
-
-  // Initial theme: saved preference, else system, else light.
+  // Initial theme: saved preference, else light. Never follow system.
   var saved = localStorage.getItem(THEME_KEY);
-  setTheme(saved ? saved : getSystemTheme());
-
-  // Listen for system theme changes only if the user hasn't saved a preference.
-  if (!saved) {
-    window
-      .matchMedia('(prefers-color-scheme: dark)')
-      .addEventListener('change', function (e) {
-        setTheme(e.matches ? DARK : LIGHT);
-      });
-  }
+  setTheme(saved ? saved : LIGHT);
 
   toggle.addEventListener('click', function () {
     var isDark = html.getAttribute('data-theme') === DARK;

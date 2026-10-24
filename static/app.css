@@ -1,23 +1,15 @@
 /* Theme layer over Bulma — luxury warm-gold palette with light/dark mode.
  *
- * Bulma is the whole design system: layout, components, spacing scale, and
- * dark mode come from it. This file only does what Bulma cannot:
- *
- *   1. Re-hues Bulma's HSL variables to a warm-gold luxury accent.
-   2. Defines light/dark mode color tokens via `data-theme` on <html>.
-   3. Adds gradient utilities and custom components (page__head, todo-row).
-   4. Accessibility: focus-visible rings, skip link, reduced motion.
- *
- * Bulma exposes its palette as HSL triplets, so overriding hue/saturation/
- * lightness re-derives every dependent token (button, link, focus ring, tag).
+ * Bulma handles layout/components; this file re-hues the accent and adds
+ * custom tokens. Light mode is the default — no system-following surprise.
  */
 
 /* ========================================================================
-   Design tokens — light mode (default)
+   Design tokens — light mode (default, always)
    ======================================================================== */
 
 :root {
-  /* --- Luxury accent: warm gold / bronze --- */
+  /* Luxury accent: warm gold / bronze */
   --bulma-primary-h: 40deg;
   --bulma-primary-s: 70%;
   --bulma-primary-l: 45%;
@@ -26,35 +18,35 @@
   --bulma-link-s: 70%;
   --bulma-link-l: 45%;
 
-  /* --- Paper / surface (light mode) --- */
-  --color-paper: hsl(45deg 20% 97%);
+  /* Paper / surface — light */
+  --color-paper: hsl(45deg 18% 96%);
   --color-surface: hsl(0deg 0% 100%);
-  --color-surface-muted: hsl(45deg 15% 94%);
-  --color-paper-inverse: hsl(240deg 20% 12%);
+  --color-surface-muted: hsl(45deg 12% 92%);
+  --color-paper-inverse: hsl(240deg 20% 10%);
 
-  /* --- Text --- */
-  --color-ink: hsl(240deg 10% 15%);
-  --color-ink-muted: hsl(240deg 6% 45%);
+  /* Text */
+  --color-ink: hsl(240deg 8% 12%);
+  --color-ink-muted: hsl(240deg 5% 45%);
   --color-ink-on-paper: hsl(0deg 0% 100%);
 
-  /* --- State colours --- */
-  --color-success: hsl(140deg 60% 45%);
-  --color-error: hsl(25deg 70% 50%);
+  /* State colours */
+  --color-success: hsl(140deg 55% 40%);
+  --color-error: hsl(25deg 75% 50%);
   --color-focus: hsl(40deg 70% 45%);
 
-  /* --- Typography --- */
+  /* Typography */
   --font-display: "Playfair Display", serif;
   --font-body: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --text-display: clamp(2.5rem, 5vw + 1rem, 4.5rem);
-  --text-display-s: clamp(1.75rem, 4vw + 0.75rem, 2.75rem);
-  --text-section: clamp(1.5rem, 3vw + 0.5rem, 2rem);
+  --text-display: clamp(2.25rem, 4vw + 1rem, 4rem);
+  --text-display-s: clamp(1.5rem, 3vw + 0.75rem, 2.5rem);
+  --text-section: clamp(1.25rem, 2.5vw + 0.5rem, 1.75rem);
   --text-body: 1rem;
   --text-small: 0.875rem;
 
-  /* --- 4pt spacing scale --- */
+  /* 4pt spacing scale */
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
   --space-md: 1rem;
@@ -62,7 +54,7 @@
   --space-xl: 2rem;
   --space-2xl: 3rem;
 
-  /* --- Motion --- */
+  /* Motion */
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
@@ -71,7 +63,7 @@
   --radius-md: 10px;
   --rule-hair: 1px solid hsl(0deg 0% 0% / 0.08);
 
-  /* --- Gradients --- */
+  /* Gradients */
   --gradient-accent: linear-gradient(
     135deg,
     hsl(var(--bulma-primary-h) var(--bulma-primary-s) var(--bulma-primary-l)) 0%,
@@ -79,13 +71,13 @@
   );
   --gradient-sheen: linear-gradient(
     180deg,
-    hsl(0deg 0% 100% / 0.14) 0%,
+    hsl(0deg 0% 100% / 0.12) 0%,
     hsl(0deg 0% 100% / 0) 60%
   );
   --gradient-page: linear-gradient(
     180deg,
-    var(--bulma-scheme-main-ter) 0%,
-    var(--bulma-scheme-main-bis) 100%
+    hsl(45deg 18% 96%) 0%,
+    hsl(45deg 15% 90%) 100%
   );
 }
 
@@ -94,36 +86,41 @@
    ======================================================================== */
 
 html[data-theme="dark"] {
-  /* --- Luxury accent: warm gold / bronze (lighter for dark bg contrast) --- */
+  /* Warm gold accent, lighter for dark-bg contrast */
   --bulma-primary-h: 40deg;
-  --bulma-primary-s: 75%;
-  --bulma-primary-l: 55%;
+  --bulma-primary-s: 80%;
+  --bulma-primary-l: 60%;
 
   --bulma-link-h: 40deg;
-  --bulma-link-s: 75%;
-  --bulma-link-l: 55%;
+  --bulma-link-s: 80%;
+  --bulma-link-l: 60%;
 
-  /* --- Paper / surface (dark mode) --- */
-  --color-paper: hsl(240deg 15% 12%);
-  --color-surface: hsl(240deg 12% 16%);
-  --color-surface-muted: hsl(240deg 10% 20%);
+  /* Paper / surface — dark but not black */
+  --color-paper: hsl(240deg 12% 10%);
+  --color-surface: hsl(240deg 10% 14%);
+  --color-surface-muted: hsl(240deg 8% 18%);
   --color-paper-inverse: hsl(0deg 0% 100%);
 
-  /* --- Text --- */
-  --color-ink: hsl(0deg 0% 95%);
-  --color-ink-muted: hsl(240deg 6% 60%);
-  --color-ink-on-paper: hsl(240deg 10% 15%);
+  /* Text */
+  --color-ink: hsl(0deg 0% 94%);
+  --color-ink-muted: hsl(240deg 6% 55%);
+  --color-ink-on-paper: hsl(240deg 10% 10%);
 
-  /* --- State colours --- */
-  --color-success: hsl(140deg 60% 55%);
-  --color-error: hsl(25deg 80% 60%);
-  --color-focus: hsl(40deg 80% 60%);
+  /* State colours */
+  --color-success: hsl(140deg 55% 55%);
+  --color-error: hsl(25deg 85% 60%);
+  --color-focus: hsl(40deg 85% 65%);
 
-  /* --- Gradients --- */
+  /* Gradients */
   --gradient-accent: linear-gradient(
     135deg,
     hsl(var(--bulma-primary-h) var(--bulma-primary-s) var(--bulma-primary-l)) 0%,
-    hsl(40deg 75% 65%) 100%
+    hsl(40deg 80% 70%) 100%
+  );
+  --gradient-page: linear-gradient(
+    180deg,
+    hsl(240deg 12% 10%) 0%,
+    hsl(240deg 10% 6%) 100%
   );
 }
 
@@ -146,12 +143,12 @@ body {
     color var(--dur-base) var(--ease-out);
 }
 
-/* Skip link — keyboard users can jump straight to main content */
+/* Skip link */
 .skip-link {
   position: absolute;
   top: -10000px;
   left: 0;
-  background: var(--color-accent);
+  background: var(--color-accent, hsl(var(--bulma-primary-h) var(--bulma-primary-s) var(--bulma-primary-l)));
   color: var(--color-ink-on-paper);
   padding: var(--space-sm) var(--space-md);
   z-index: 10000;
@@ -164,7 +161,7 @@ body {
   left: var(--space-sm);
 }
 
-/* Luxury headings: serif, roman only — italic headers are banned. */
+/* Luxury headings — serif, roman only */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
   font-style: normal;
@@ -172,13 +169,12 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.02em;
   color: var(--color-ink);
 }
-
 h1 { font-size: var(--text-display); }
 h2 { font-size: var(--text-display-s); }
 h3 { font-size: var(--text-section); }
 
 a {
-  color: var(--color-accent);
+  color: var(--color-accent, hsl(var(--bulma-primary-h) var(--bulma-primary-s) var(--bulma-primary-l)));
   text-decoration: none;
 }
 a:hover {
@@ -194,10 +190,10 @@ a:hover {
 .input,
 .box,
 .card {
-  border-radius: var(--todo-radius);
+  border-radius: var(--radius-md);
 }
 
-/* Focus-visible ring — WCAG 2.1 2.4.7, visible at ≥3:1 contrast */
+/* Focus-visible ring — WCAG 2.1 2.4.7 */
 .button:focus-visible,
 .input:focus-visible,
 a:focus-visible {
@@ -206,7 +202,7 @@ a:focus-visible {
 }
 
 /* ========================================================================
-   Page: Long Document macrostructure
+   Page macrostructure
    ======================================================================== */
 
 .page__head {
@@ -435,7 +431,7 @@ a:focus-visible {
 }
 
 /* ========================================================================
-   Mobile — Bulma is mobile-first, so this is the desktop adjustment
+   Mobile — Bulma is mobile-first
    ======================================================================== */
 
 @media screen and (max-width: 768px) {
