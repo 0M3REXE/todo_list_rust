@@ -5,32 +5,39 @@
 //   esc → clear search / blur active input
 
 (function () {
-  var searchInput = document.getElementById('todo-search');
-  var newTodoInput = document.getElementById('todo-text');
-  var rows = document.querySelectorAll('.todo-row[data-text]');
-
   // --- Search filter -------------------------------------------------------
 
   function filterTodos() {
+    var searchInput = document.getElementById('todo-search');
+    var rows = document.querySelectorAll('.todo-row[data-text]');
     var q = (searchInput ? searchInput.value : '').toLowerCase().trim();
     var visible = 0;
 
     rows.forEach(function (row) {
       var text = (row.getAttribute('data-text') || '').toLowerCase();
       var match = q === '' || text.indexOf(q) !== -1;
-      row.style.display = match ? '' : 'none';
+      row.hidden = !match;
       if (match) visible++;
     });
 
-    var empty = document.querySelector('.todo-empty');
-    if (empty) {
-      empty.style.display = visible === 0 && q !== '' ? '' : 'none';
-    }
+    var emptyList = document.querySelector('[data-empty-list]');
+    var noMatches = document.querySelector('[data-search-empty]');
+    if (emptyList) emptyList.hidden = q !== '';
+    if (noMatches) noMatches.hidden = q === '' || visible > 0;
   }
 
-  if (searchInput) {
-    searchInput.addEventListener('input', filterTodos);
-  }
+  document.addEventListener('input', function (event) {
+    if (event.target && event.target.id === 'todo-search') filterTodos();
+  });
+
+  document.addEventListener('click', function (event) {
+    var clearButton = event.target.closest && event.target.closest('[data-clear-search]');
+    var searchInput = document.getElementById('todo-search');
+    if (!clearButton || !searchInput) return;
+    searchInput.value = '';
+    filterTodos();
+    searchInput.focus();
+  });
 
   // --- Keyboard shortcuts --------------------------------------------------
 
@@ -44,6 +51,7 @@
 
     if (event.key === '/' && !isTyping) {
       event.preventDefault();
+      var searchInput = document.getElementById('todo-search');
       if (searchInput) {
         searchInput.focus();
         searchInput.select();
@@ -53,6 +61,7 @@
 
     if (event.key === 'n' && !isTyping && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
+      var newTodoInput = document.getElementById('todo-text');
       if (newTodoInput) {
         newTodoInput.focus();
       }
@@ -60,6 +69,7 @@
     }
 
     if (event.key === 'Escape') {
+      var searchInput = document.getElementById('todo-search');
       if (searchInput && document.activeElement === searchInput) {
         searchInput.value = '';
         filterTodos();
@@ -69,10 +79,8 @@
     }
   });
 
-  // Refresh row references after htmx swaps the list fragment
   document.addEventListener('htmx:afterSwap', function (event) {
-    if (event.target && event.target.id === 'todo-list') {
-      rows = document.querySelectorAll('.todo-row[data-text]');
-    }
+    if (event.target && event.target.id === 'todo-list') filterTodos();
   });
+
 })();

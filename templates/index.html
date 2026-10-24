@@ -20,46 +20,29 @@
 <body class="page min-h-screen bg-[var(--paper)] text-[var(--ink)] antialiased">
     <a href="#main-content" class="skip-link">Skip to your tasks</a>
 
-    <header class="shell header">
-        <div class="shell">
+    <header class="shell">
+        <div class="header">
+            <a href="/" class="header__brand">Todo List</a>
             <div class="header__actions">
-                <div class="header__actions">
-                    <div >
-                        <a href="/" class="header__brand">Todo List</a>
-                    </div>
-                    <div >
-                        <p class="todo-header__email">Your tasks · {{ email }}</p>
-                        <h1 class="todo-header__title">Todos</h1>
-                    </div>
-                </div>
-                <div class="header__actions">
-                    <div >
-                        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
-                            <span class="theme-toggle-icon">🌙</span>
-                        </button>
-                    </div>
-                    <div >
-                        <form method="post" action="/logout">
-                            <button class="btn btn--ghost btn--sm" type="submit">Log out</button>
-                        </form>
-                    </div>
-                    <div >
-                        <a class="btn btn--ghost btn--sm" href="/account/password">Account</a>
-                    </div>
-                </div>
+                {% include "theme_toggle.html" %}
+                <a class="btn btn--ghost btn--sm" href="/account/password">Account</a>
+                <form method="post" action="/logout">
+                    <button class="btn btn--ghost btn--sm" type="submit">Log out</button>
+                </form>
             </div>
         </div>
     </header>
 
     <main id="main-content" class="page__main" aria-label="Todo list">
         <div class="shell">
+            <div class="todo-header">
+                <div>
+                    <p class="todo-header__email">Your tasks · {{ email }}</p>
+                    <h1 class="todo-header__title">Todos</h1>
+                </div>
+            </div>
             {% include "todo_panel.html" %}
         </div>
     </main>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/service-worker.js');
-      }
-    </script>
 </body>
 </html>

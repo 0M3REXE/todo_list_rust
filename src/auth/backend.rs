@@ -38,6 +38,12 @@ impl AuthnBackend for AuthBackend {
         &self,
         creds: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
+        // Signup never accepts longer passwords. Reject oversized login
+        // attempts before Argon2 so a large form value cannot waste CPU.
+        if creds.password.chars().count() > password::MAX_PASSWORD_LEN {
+            return Ok(None);
+        }
+
         let found = store::find_by_email(&self.db, creds.email.trim()).await?;
 
         // Hash either the real password hash or a throwaway one, so that a

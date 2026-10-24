@@ -1,21 +1,16 @@
-// Service worker — offline shell for the Todo List PWA.
-// Caches static assets + page shells so the app loads offline.
-
-var CACHE_NAME = 'todo-v2';
+// Cache public assets and a data-free offline screen. Never persist account pages
+// or todo responses: they can contain private data on a shared device.
+var CACHE_NAME = 'todo-v4';
 var STATIC_ASSETS = [
-  '/',
-  '/app',
-  '/login',
-  '/signup',
+  '/offline',
   '/static/vendor/htmx.min.js',
   '/static/app.css',
   '/static/theme-toggle.js',
   '/static/manifest.json',
-  '/static/icons/icon-192x192.png',
-  '/static/icons/icon-512x512.png'
+  '/static/icons/icon-192x192.svg',
+  '/static/icons/icon-512x512.svg'
 ];
 
-// Install: cache the shell
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
@@ -25,7 +20,6 @@ self.addEventListener('install', function (event) {
   self.skipWaiting();
 });
 
-// Activate: clean old caches
 self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
@@ -33,42 +27,29 @@ self.addEventListener('activate', function (event) {
         keys.filter(function (key) { return key !== CACHE_NAME; })
           .map(function (key) { return caches.delete(key); })
       );
-    })
+    }).then(function () { return self.clients.claim(); })
   );
-  self.clients.claim();
 });
 
-// Fetch: network-first for pages, cache-first for static assets
 self.addEventListener('fetch', function (event) {
-  var url = new URL(event.request.url);
+  var request = event.request;
+  var url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  // Static assets: cache first
-  if (url.origin === location.origin && url.pathname.startsWith('/static/')) {
+  if (url.pathname.startsWith('/static/')) {
     event.respondWith(
-      caches.match(event.request).then(function (cached) {
-        return cached || fetch(event.request);
+      caches.match(request).then(function (cached) {
+        return cached || fetch(request);
       })
     );
     return;
   }
 
-  // Page shells: network first, cache fallback
-  if (event.request.mode === 'navigate') {
+  if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).then(function (response) {
-        // Cache a copy of the fresh page
-        var copy = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) {
-          cache.put(event.request, copy);
-        });
-        return response;
-      }).catch(function () {
-        return caches.match(event.request);
+      fetch(request).catch(function () {
+        return caches.match('/offline');
       })
     );
-    return;
   }
-
-  // API / everything else: try network, no offline fallback
-  event.respondWith(fetch(event.request));
 });

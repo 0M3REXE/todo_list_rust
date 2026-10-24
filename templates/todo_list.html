@@ -2,15 +2,7 @@
 {% for todo in todos %}
     <li class="todo-row{% if todo.done %} todo-row--done{% endif %}" data-text="{{ todo.text }}">
         <label class="todo-check">
-            <input
-                class="todo-toggle"
-                type="checkbox"
-                {% if todo.done %}checked{% endif %}
-                hx-post="/app/todos/{{ todo.id }}/toggle"
-                hx-target="#todo-list"
-                hx-swap="outerHTML"
-                aria-label="Mark {% if todo.done %}incomplete{% else %}complete{% endif %}: {{ todo.text }}"
-            >
+            <input class="todo-toggle" type="checkbox" {% if todo.done %}checked{% endif %} hx-post="/app/todos/{{ todo.id }}/toggle" hx-target="#todo-list" hx-swap="outerHTML" aria-label="Mark {% if todo.done %}incomplete{% else %}complete{% endif %}: {{ todo.text }}">
             <span class="todo-check__box" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
             <span class="sr-only">Mark as {% if todo.done %}not done{% else %}done{% endif %}</span>
         </label>
@@ -27,6 +19,7 @@
         </button>
     </li>
 {% else %}
-    <li class="todo-empty">Nothing on the list. Type above and press Enter.</li>
+    <li class="todo-empty" data-empty-list>Nothing on the list yet. Add a task above to get started.</li>
 {% endfor %}
+    <li class="todo-empty" data-search-empty hidden>No tasks match your search.</li>
 </ul>

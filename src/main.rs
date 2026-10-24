@@ -12,16 +12,10 @@
 
 use practice::{app, db};
 use std::time::Duration;
-
-use axum::http::{
-    HeaderValue, StatusCode,
-    header::{CONTENT_SECURITY_POLICY, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS},
-};
-use tower_http::{
-    catch_panic::CatchPanicLayer, compression::CompressionLayer,
-    set_header::SetResponseHeaderLayer, timeout::TimeoutLayer, trace::TraceLayer,
-};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+const SHUTDOWN_DEADLINE: Duration = Duration::from_secs(30);
+const CLEANUP_STOP_DEADLINE: Duration = Duration::from_secs(2);
 
 #[tokio::main]
 async fn main() {
@@ -42,33 +36,7 @@ async fn main() {
     // here rather than on the first request that needs a session.
     let cleanup = app::spawn_session_cleanup(practice::auth::DbStore::new(pool.clone()));
 
-    let app = app::build_app(pool, config)
-        .layer(CompressionLayer::new())
-        .layer(SetResponseHeaderLayer::overriding(
-            CONTENT_SECURITY_POLICY,
-            HeaderValue::from_static(
-                "default-src 'self'; \
-                 script-src 'self'; \
-                 style-src 'self' https://fonts.googleapis.com; \
-                 font-src 'self' https://fonts.gstatic.com; \
-                 img-src 'self' data:; \
-                 frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-            ),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            X_CONTENT_TYPE_OPTIONS,
-            HeaderValue::from_static("nosniff"),
-        ))
-        .layer(SetResponseHeaderLayer::overriding(
-            REFERRER_POLICY,
-            HeaderValue::from_static("no-referrer"),
-        ))
-        .layer(TraceLayer::new_for_http())
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            Duration::from_secs(15),
-        ))
-        .layer(CatchPanicLayer::new());
+    let app = app::build_app(pool, config);
 
     // Nothing below this point can recover, so bind and serve failures log the
     // cause and exit non-zero. A bare `.expect` would print the panic and bury
@@ -87,17 +55,50 @@ async fn main() {
         Err(err) => tracing::warn!(?err, "listening, but local_addr failed"),
     }
 
-    let served = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await;
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let shutdown_signal = async move {
+        shutdown_signal().await;
+        let _ = shutdown_tx.send(());
+    };
+    let server = async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                let _ = shutdown_rx.await;
+            })
+            .await
+    };
+    tokio::pin!(server);
+    tokio::pin!(shutdown_signal);
+
+    // Keep serving until the signal arrives. Only then start the deadline for
+    // draining in-flight requests; wrapping `server` directly in `timeout`
+    // would stop the app 30 seconds after startup.
+    let served = tokio::select! {
+        result = &mut server => Some(result),
+        _ = &mut shutdown_signal => {
+            tokio::time::timeout(SHUTDOWN_DEADLINE, &mut server).await.ok()
+        }
+    };
 
     // The listener has closed; nothing else can arrive, so the cleanup task can
     // be told to finish instead of being killed with the process.
-    cleanup.stop().await;
+    if tokio::time::timeout(CLEANUP_STOP_DEADLINE, cleanup.stop())
+        .await
+        .is_err()
+    {
+        tracing::warn!("session cleanup task did not stop before the deadline");
+    }
 
-    if let Err(err) = served {
-        tracing::error!(?err, "server error");
-        std::process::exit(1);
+    match served {
+        Some(Ok(())) => {}
+        Some(Err(err)) => {
+            tracing::error!(?err, "server error");
+            std::process::exit(1);
+        }
+        None => {
+            tracing::error!("graceful shutdown exceeded its deadline");
+            std::process::exit(1);
+        }
     }
 }
 

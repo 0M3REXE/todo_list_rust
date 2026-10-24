@@ -1,4 +1,4 @@
-//! # Template structs — 3, one per template
+//! # Template structs, one per page or partial
 //!
 //! Each field becomes a variable in the matching `.html`. Askama compiles the
 //! template at build time, so a wrong field is a build error — and editing a
@@ -26,7 +26,8 @@ pub(crate) struct PanelTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "todo_list.html")]
-pub(crate) struct ListTemplate {
+#[template(path = "todo_list_update.html")]
+pub(crate) struct TodoUpdateTemplate {
     pub(crate) todos: Vec<Todo>,
+    pub(crate) open_count: i64,
 }

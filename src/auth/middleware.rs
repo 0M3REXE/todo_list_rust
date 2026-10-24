@@ -58,8 +58,28 @@ pub async fn verify_origin(
         return next.run(req).await;
     }
 
+    // Modern browsers report this even when privacy settings omit Referer.
+    // Reject cross-site writes independently of Origin so same-site sibling
+    // subdomains cannot skip the origin check.
+    if headers
+        .get("sec-fetch-site")
+        .and_then(|value| value.to_str().ok())
+        == Some("cross-site")
+    {
+        return (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response();
+    }
+
+    // A supplied but malformed Origin/Referer must fail closed. Requests with
+    // neither header remain supported for non-browser clients; browser writes
+    // are still covered by Sec-Fetch-Site above and SameSite cookies.
+    let supplied_origin = headers.contains_key(header::ORIGIN)
+        || headers.contains_key(header::REFERER);
     let Some(presented) = presented_host(&headers) else {
-        return next.run(req).await;
+        return if supplied_origin {
+            (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response()
+        } else {
+            next.run(req).await
+        };
     };
 
     if presented == allowed_host {

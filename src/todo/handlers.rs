@@ -21,8 +21,8 @@ use axum::{
 
 use super::{
     TodoStore,
-    store::{add, flip_done, remove, sorted, sorted_with_count},
-    templates::{IndexTemplate, ListTemplate, PanelTemplate},
+    store::{add, flip_done, remove, sorted_with_count},
+    templates::{IndexTemplate, PanelTemplate, TodoUpdateTemplate},
 };
 use crate::AppError;
 use crate::auth::CurrentUser;
@@ -61,20 +61,19 @@ async fn create(
     Ok(Html(PanelTemplate { todos, open_count }.render()?))
 }
 
-/// Runs `mutate`, then renders the list fragment. `mutate` returns false when
-/// the id was not found **for this user**, which becomes a 404 whose body is
-/// still the current list.
+/// Runs `mutate`, then renders the list and its out-of-band open count.
+/// `mutate` returns false when the id was not found **for this user**, which
+/// becomes a 404 whose body is still the current list.
 ///
-/// The mutation and the list re-fetch are independent, so they run in parallel
-/// instead of waiting for one round trip before starting the next.
+/// The list is fetched after the write completes. Running them concurrently can
+/// observe the pre-write state and return stale rows or a stale open count.
 async fn with_list<F>(db: &TodoStore, user_id: i64, mutate: F) -> Result<Response, AppError>
 where
     F: std::future::Future<Output = Result<bool, AppError>>,
 {
-    let (found, todos) = tokio::join!(mutate, sorted(db, user_id));
-    let found = found?;
-    let todos = todos?;
-    let body = ListTemplate { todos }.render()?;
+    let found = mutate.await?;
+    let (todos, open_count) = sorted_with_count(db, user_id).await?;
+    let body = TodoUpdateTemplate { todos, open_count }.render()?;
     let status = if found {
         StatusCode::OK
     } else {

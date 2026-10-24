@@ -6,10 +6,7 @@
     <title>Log in · Todo List</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
-    >
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap">
     <link rel="stylesheet" href="/static/app.css">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#d4a033">
@@ -19,91 +16,29 @@
 </head>
 <body class="page min-h-screen bg-[var(--paper)] text-[var(--ink)] antialiased">
     <a href="#main-content" class="skip-link">Skip to login form</a>
-
-    <header class="shell header">
-        <div class="shell">
-            <div class="header__actions">
-                <div class="header__actions">
-                    <div >
-                        <a href="/" class="header__brand">Todo List</a>
-                    </div>
-                </div>
-                <div class="header__actions">
-                    <div >
-                        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
-                            <span class="theme-toggle-icon">🌙</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <main id="main-content" class="page__main">
-        <div class="shell">
-            <div >
-                <div class="auth">
-                    <h1 class="auth__title">Log in</h1>
-
-                    {% if let Some(message) = error %}
-                    <div class="alert alert--danger" role="alert">{{ message }}</div>
-                    {% endif %}
-
-                    <form method="post" action="/login">
-                        <input type="hidden" name="next" value="{{ next }}">
-                        <div class="field">
-                            <label class="field__label" for="email">Email</label>
-                            <div >
-                                <input
-                                    class="input"
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    autocomplete="username"
-                                    required
-                                    autofocus
-                                >
-                            </div>
-                        </div>
-                        <div class="field">
-                            <label class="field__label" for="password">Password</label>
-                            <div >
-                                <input
-                                    class="input"
-                                    type="password"
-                                    id="password"
-                                    name="password"
-                                    autocomplete="current-password"
-                                    required
-                                >
-                                <button
-                                    class="input-group__toggle"
-                                    type="button"
-                                    data-password-toggle
-                                    aria-pressed="false"
-                                >Show</button>
-                            </div>
-                        </div>
-                        <div class="field">
-                            <div >
-                                <button class="btn btn--primary btn--full" type="submit">
-                                    Log in
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-
-                    <p class="auth__footer mt-4">
-                        <a href="/signup">Create an account</a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </main>
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/service-worker.js');
-      }
-    </script>
+    <header class="shell"><div class="header">
+        <a href="/" class="header__brand">Todo List</a>
+        {% include "theme_toggle.html" %}
+    </div></header>
+    <main id="main-content" class="page__main"><div class="shell">
+        <section class="auth card">
+            <a class="auth-back" href="/">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7M7 12h13"/></svg>
+                Back to home
+            </a>
+            <h1 class="auth__title">Log in</h1>
+            {% if let Some(message) = error %}<div class="alert alert--danger" role="alert">{{ message }}</div>{% endif %}
+            <form method="post" action="/login">
+                <input type="hidden" name="next" value="{{ next }}">
+                <div class="field"><label class="field__label" for="email">Email</label><input class="input" type="email" id="email" name="email" autocomplete="username" required></div>
+                <div class="field"><label class="field__label" for="password">Password</label><div class="input-group">
+                    <input class="input" type="password" id="password" name="password" autocomplete="current-password" required>
+                    <button class="input-group__toggle" type="button" data-password-toggle aria-pressed="false">Show</button>
+                </div></div>
+                <button class="btn btn--primary btn--full" type="submit">Log in</button>
+            </form>
+            <p class="auth__footer"><a href="/signup">Create an account</a></p>
+        </section>
+    </div></main>
 </body>
 </html>

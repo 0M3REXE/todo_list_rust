@@ -9,5 +9,11 @@
   "routes": [
     { "src": "/static/(.*)", "dest": "/server.rs" },
     { "src": "/(.*)", "dest": "/server.rs" }
+  ],
+  "crons": [
+    {
+      "path": "/api/maintenance/expired-sessions",
+      "schedule": "0 4 * * *"
+    }
   ]
 }

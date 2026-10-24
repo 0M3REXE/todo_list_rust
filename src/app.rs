@@ -24,10 +24,11 @@
 //! identical. Templates are already compiled in by askama for the same reason.
 
 use std::time::Duration as StdDuration;
+use std::time::Duration;
 
 use axum::{
-    extract::Request,
-    http::{StatusCode, header},
+    extract::{DefaultBodyLimit, Request, State},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
@@ -36,6 +37,13 @@ use axum::{
 use axum_login::{
     AuthManagerLayerBuilder,
     tower_sessions::{Expiry, SessionManagerLayer, cookie::SameSite, ExpiredDeletion},
+};
+use tower_http::{
+    catch_panic::CatchPanicLayer,
+    compression::CompressionLayer,
+    set_header::SetResponseHeaderLayer,
+    timeout::TimeoutLayer,
+    trace::TraceLayer,
 };
 
 use crate::auth::{self, AuthBackend, AuthSession, DbStore};
@@ -54,8 +62,13 @@ pub static THEME_TOGGLE_JS: &str = include_str!("../static/theme-toggle.js");
 pub static KEYBOARD_JS: &str = include_str!("../static/keyboard.js");
 /// Service worker for offline PWA support.
 pub static SERVICE_WORKER_JS: &str = include_str!("../static/service-worker.js");
+/// A safe, data-free page shown when an installed app opens without a network.
+pub static OFFLINE_HTML: &str = include_str!("../static/offline.html");
 /// Web app manifest for PWA installation.
 pub static MANIFEST_JSON: &str = include_str!("../static/manifest.json");
+/// Icons referenced by the PWA manifest.
+pub static ICON_192_SVG: &str = include_str!("../static/icons/icon-192x192.svg");
+pub static ICON_512_SVG: &str = include_str!("../static/icons/icon-512x512.svg");
 /// Vendored htmx, unmodified.
 pub static HTMX_JS: &str = include_str!("../static/vendor/htmx.min.js");
 
@@ -111,6 +124,8 @@ const SESSION_IDLE_LIFETIME: time::Duration = time::Duration::days(7);
 /// row is already unusable, this is only about not letting the table grow
 /// forever.
 const CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(60 * 60);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_REQUEST_BODY: usize = 16 * 1024;
 
 /// Serves an embedded asset with a long cache life. These paths are stable
 /// filenames rather than content-hashed, but the content is fixed per build, so
@@ -175,6 +190,32 @@ async fn landing(session: AuthSession) -> Result<Response, AppError> {
     .into_response())
 }
 
+/// Vercel invokes this daily. The bearer secret must be configured in the
+/// deployment environment as `CRON_SECRET`.
+async fn cleanup_expired_sessions(
+    State(db): State<Db>,
+    headers: HeaderMap,
+) -> Result<StatusCode, AppError> {
+    let Ok(secret) = std::env::var("CRON_SECRET") else {
+        tracing::error!("CRON_SECRET is not configured");
+        return Ok(StatusCode::SERVICE_UNAVAILABLE);
+    };
+    let expected = format!("Bearer {secret}");
+    if headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        != Some(expected.as_str())
+    {
+        return Ok(StatusCode::UNAUTHORIZED);
+    }
+
+    DbStore::new(db)
+        .delete_expired()
+        .await
+        .map_err(|err| AppError::Session(err.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 /// Builds the whole application: routes, session layer, auth layer, CSRF check.
 pub fn build_app(db: Db, config: AppConfig) -> Router {
     let session_layer = SessionManagerLayer::new(DbStore::new(db.clone()))
@@ -196,12 +237,16 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
 
     // The todo app lives under /app so the landing page can own /.
     let todo_app = crate::todo::build_router(db.clone());
+    let maintenance = Router::new()
+        .route("/api/maintenance/expired-sessions", get(cleanup_expired_sessions))
+        .with_state(db.clone());
 
     Router::new()
         // Public first: landing page, then auth pages.
         .route("/", get(landing))
         .merge(auth::routes(db.clone()))
         .merge(auth::account_routes(db.clone()))
+        .merge(maintenance)
         // The todo app is nested under /app so its internal routes (/,
         // /todos, /todos/{id}/toggle, /todos/{id}/delete) become
         // /app/, /app/todos, etc.
@@ -228,8 +273,33 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             get(|| std::future::ready(asset(SERVICE_WORKER_JS, "application/javascript"))),
         )
         .route(
+            "/service-worker.js",
+            get(|| {
+                std::future::ready((
+                    StatusCode::OK,
+                    [
+                        (header::CONTENT_TYPE, "application/javascript"),
+                        (header::CACHE_CONTROL, "no-cache"),
+                    ],
+                    SERVICE_WORKER_JS,
+                ))
+            }),
+        )
+        .route(
+            "/offline",
+            get(|| std::future::ready(asset(OFFLINE_HTML, "text/html; charset=utf-8"))),
+        )
+        .route(
             "/static/manifest.json",
             get(|| std::future::ready(asset(MANIFEST_JSON, "application/json"))),
+        )
+        .route(
+            "/static/icons/icon-192x192.svg",
+            get(|| std::future::ready(asset(ICON_192_SVG, "image/svg+xml"))),
+        )
+        .route(
+            "/static/icons/icon-512x512.svg",
+            get(|| std::future::ready(asset(ICON_512_SVG, "image/svg+xml"))),
         )
         .route(
             "/static/vendor/htmx.min.js",
@@ -243,6 +313,37 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             auth::verify_origin,
         ))
         .layer(auth_layer)
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY))
+        .layer(CompressionLayer::new())
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(
+                "default-src 'self'; \
+                 base-uri 'self'; object-src 'none'; frame-ancestors 'none'; \
+                 form-action 'self'; script-src 'self'; \
+                 style-src 'self' https://fonts.googleapis.com; \
+                 font-src 'self' https://fonts.gstatic.com; \
+                 img-src 'self' data:; connect-src 'self'",
+            ),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::HeaderName::from_static("permissions-policy"),
+            HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
+        ))
+        .layer(TraceLayer::new_for_http())
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        .layer(CatchPanicLayer::new())
 }
 
 /// Deletes expired session rows on a timer, until told to stop.

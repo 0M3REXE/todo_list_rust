@@ -14,4 +14,6 @@ cargo run
 
 Use `npm run css:watch` while editing templates and styles. Vercel's Rust builder embeds the committed `static/app.css` directly.
 
+For Vercel, set `APP_ALLOWED_HOST` to the production hostname (without a scheme), keep `SESSION_SECURE=true`, and set `CRON_SECRET` to a random secret of at least 16 characters. The configured daily cron uses it to authorize expired-session cleanup.
+
 Tests build the same router as the binary through `app::build_app_with`, which swaps in a mailer that captures messages instead of sending them.

@@ -1,40 +1,45 @@
-// Theme toggle — light mode default, persists preference in localStorage,
-// applies `data-theme` attribute on <html> so CSS can switch palettes.
-
+// Theme preference and service-worker registration. Icons are inline SVGs,
+// so no icon library or emoji font is required.
 (function () {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(function (error) {
+      console.warn('Service worker registration failed', error);
+    });
+    navigator.serviceWorker.getRegistrations().then(function (registrations) {
+      registrations.forEach(function (registration) {
+        if (new URL(registration.scope).pathname === '/static/') registration.unregister();
+      });
+    });
+  }
+
   var html = document.documentElement;
   var toggle = document.querySelector('.theme-toggle');
-  var icon = document.querySelector('.theme-toggle-icon');
-
-  if (!toggle || !icon) return;
+  if (!toggle) return;
 
   var THEME_KEY = 'todo-theme';
-  var DARK = 'dark';
-  var LIGHT = 'light';
+  function setTheme(theme, persist) {
+    var dark = theme === 'dark';
+    if (dark) html.setAttribute('data-theme', 'dark');
+    else html.removeAttribute('data-theme');
 
-  var ICON_DARK = '☀️';   // light mode active → show sun (switch to light)
-  var ICON_LIGHT = '🌙';  // dark mode active → show moon (switch to dark)
+    toggle.setAttribute('aria-pressed', String(dark));
+    var label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    toggle.setAttribute('aria-label', label);
+    toggle.setAttribute('title', label);
 
-  function setTheme(theme) {
-    if (theme === DARK) {
-      html.setAttribute('data-theme', DARK);
-      localStorage.setItem(THEME_KEY, DARK);
-      icon.textContent = ICON_DARK;
-      toggle.setAttribute('aria-pressed', 'true');
-    } else {
-      html.removeAttribute('data-theme');
-      localStorage.setItem(THEME_KEY, LIGHT);
-      icon.textContent = ICON_LIGHT;
-      toggle.setAttribute('aria-pressed', 'false');
+    if (persist) {
+      try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); }
+      catch (_) { /* Theme still works for this page when storage is disabled. */ }
     }
   }
 
-  // Initial theme: saved preference, else light. Never follow system.
-  var saved = localStorage.getItem(THEME_KEY);
-  setTheme(saved ? saved : LIGHT);
+  var saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); }
+  catch (_) { /* Use the light theme when storage is disabled. */ }
+  setTheme(saved === 'dark' ? 'dark' : 'light', false);
 
   toggle.addEventListener('click', function () {
-    var isDark = html.getAttribute('data-theme') === DARK;
-    setTheme(isDark ? LIGHT : DARK);
+    var dark = html.getAttribute('data-theme') === 'dark';
+    setTheme(dark ? 'light' : 'dark', true);
   });
 })();

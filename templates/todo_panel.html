@@ -1,30 +1,13 @@
 <div id="todo-panel" class="todo-panel card">
     <div class="todo-search">
-        <div class="min-w-0 flex-1">
-            <input
-                id="todo-search"
-                class="input"
-                type="search"
-                name="search"
-                placeholder="Search tasks…"
-                autocomplete="off"
-                aria-label="Search todos"
-            >
-        </div>
-        <div class="shrink-0">
-            <button
-                type="button"
-                class="btn btn--ghost btn--sm"
-                onclick="document.getElementById('todo-search').value=''; filterTodos()"
-                title="Clear search"
-            >
-                ✕
-            </button>
-        </div>
+        <input id="todo-search" class="input" type="search" name="search" placeholder="Search tasks…" autocomplete="off" aria-label="Search todos">
+        <button type="button" class="todo-search__clear" data-clear-search aria-label="Clear search" title="Clear search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
     </div>
     <form class="todo-add" hx-post="/app/todos" hx-target="#todo-panel" hx-swap="outerHTML">
-        <div class="min-w-0 flex-1">
-            <label class="todo-label sr-only" for="todo-text">Add a todo</label>
+        <div class="todo-add__field">
+            <label class="sr-only" for="todo-text">Add a todo</label>
             <input
                 id="todo-text"
                 class="todo-input input"
@@ -36,16 +19,8 @@
                 required
             >
         </div>
-        <div class="shrink-0">
-            <button
-                type="submit"
-                class="todo-submit btn btn--primary btn--full"
-                hx-disabled-elt="this"
-            >
-                Add
-            </button>
-        </div>
+        <button type="submit" class="todo-submit btn btn--primary" hx-disabled-elt="this">Add task</button>
     </form>
 {% include "todo_list.html" %}
-    <p class="todo-count text-xs text-[var(--ink-muted)]" aria-live="polite">{{ open_count }} open</p>
+    <p id="todo-count" class="todo-count text-xs text-[var(--ink-muted)]" aria-live="polite">{{ open_count }} open</p>
 </div>
