@@ -12,6 +12,8 @@
     >
     <link rel="stylesheet" href="/static/app.css">
     <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/brand-mark.svg">
+    <link rel="apple-touch-icon" href="/static/icons/icon-180x180.png">
     <meta name="theme-color" content="#d4a033">
     <script src="/static/vendor/htmx.min.js" defer></script>
     <script src="/static/theme-toggle.js" defer></script>
@@ -22,7 +24,7 @@
 
     <header class="shell">
         <div class="header">
-            <a href="/" class="header__brand">Todo List</a>
+            {% include "brand.html" %}
             <div class="header__actions">
                 {% include "theme_toggle.html" %}
                 <a class="btn btn--ghost btn--sm" href="/account/password">Account</a>

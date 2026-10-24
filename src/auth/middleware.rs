@@ -82,11 +82,23 @@ pub async fn verify_origin(
         };
     };
 
-    if presented == allowed_host {
+    let request_host = req
+        .headers()
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .or_else(|| req.uri().authority().map(|authority| authority.as_str()))
+        .and_then(normalize_host);
+    let matches_request_host = request_host.as_deref() == Some(presented.as_str());
+    let matches_configured_host = allowed_host
+        .split(',')
+        .filter_map(normalize_host)
+        .any(|allowed| allowed == presented);
+
+    if matches_request_host || matches_configured_host {
         return next.run(req).await;
     }
 
-    tracing::warn!(host = %presented, %allowed_host, "rejected a cross-origin request");
+    tracing::warn!(host = %presented, request_host = ?request_host, %allowed_host, "rejected a cross-origin request");
     (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response()
 }
 
@@ -107,15 +119,26 @@ fn is_state_changing(method: &Method) -> bool {
 /// same place.
 fn presented_host(headers: &HeaderMap) -> Option<String> {
     if let Some(origin) = headers.get(header::ORIGIN) {
-        return authority_of(origin.to_str().ok()?);
+        return normalize_host(origin.to_str().ok()?);
     }
-    authority_of(headers.get(header::REFERER)?.to_str().ok()?)
+    normalize_host(headers.get(header::REFERER)?.to_str().ok()?)
 }
 
-fn authority_of(url: &str) -> Option<String> {
-    let (_, rest) = url.split_once("://")?;
-    let authority = rest.split('/').next().unwrap_or_default();
-    (!authority.is_empty()).then(|| authority.to_owned())
+/// Accepts either a URL or a host[:port], and normalizes DNS case and trailing
+/// slashes before exact comparison. Userinfo and whitespace are never valid.
+fn normalize_host(value: &str) -> Option<String> {
+    let value = value.trim();
+    let authority = match value.split_once("://") {
+        Some((_, rest)) => rest.split('/').next().unwrap_or_default(),
+        None => value.split('/').next().unwrap_or_default(),
+    };
+    if authority.is_empty()
+        || authority.contains('@')
+        || authority.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+    Some(authority.trim_end_matches('.').to_ascii_lowercase())
 }
 
 /// Percent-encodes the characters that would otherwise break a query string,

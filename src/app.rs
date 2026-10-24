@@ -66,9 +66,13 @@ pub static SERVICE_WORKER_JS: &str = include_str!("../static/service-worker.js")
 pub static OFFLINE_HTML: &str = include_str!("../static/offline.html");
 /// Web app manifest for PWA installation.
 pub static MANIFEST_JSON: &str = include_str!("../static/manifest.json");
-/// Icons referenced by the PWA manifest.
-pub static ICON_192_SVG: &str = include_str!("../static/icons/icon-192x192.svg");
-pub static ICON_512_SVG: &str = include_str!("../static/icons/icon-512x512.svg");
+/// The app's header mark and platform icons.
+pub static BRAND_MARK_SVG: &str = include_str!("../static/brand-mark.svg");
+pub static ICON_180_PNG: &[u8] = include_bytes!("../static/icons/icon-180x180.png");
+pub static ICON_192_PNG: &[u8] = include_bytes!("../static/icons/icon-192x192.png");
+pub static ICON_512_PNG: &[u8] = include_bytes!("../static/icons/icon-512x512.png");
+pub static ICON_512_MASKABLE_PNG: &[u8] =
+    include_bytes!("../static/icons/icon-512-maskable.png");
 /// Vendored htmx, unmodified.
 pub static HTMX_JS: &str = include_str!("../static/vendor/htmx.min.js");
 
@@ -80,8 +84,9 @@ pub struct AppConfig {
     /// never sent over plain http, so setting this wrongly on a real
     /// deployment silently logs everyone out.
     pub session_secure: bool,
-    /// The `host[:port]` that state-changing requests are allowed to come
-    /// from. See `auth::middleware::verify_origin`.
+    /// Comma-separated trusted hostnames for state-changing request origins.
+    /// The request's own Host is also checked, so Vercel preview and custom
+    /// domains work without trusting arbitrary origins.
     pub allowed_host: String,
 }
 
@@ -105,8 +110,33 @@ impl AppConfig {
             .and_then(|raw| raw.parse().ok())
             .unwrap_or(defaults.session_secure);
 
-        let allowed_host =
-            std::env::var("APP_ALLOWED_HOST").unwrap_or(defaults.allowed_host.clone());
+        let mut allowed_hosts: Vec<String> = std::env::var("APP_ALLOWED_HOST")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|host| !host.is_empty())
+            .map(str::to_owned)
+            .collect();
+
+        // Vercel provides the active deployment hostname and the project's
+        // production hostname at runtime. Include them so custom and preview
+        // deployment URLs do not need to be hard-coded in one env variable.
+        for name in [
+            "VERCEL_URL",
+            "VERCEL_BRANCH_URL",
+            "VERCEL_PROJECT_PRODUCTION_URL",
+        ] {
+            if let Ok(host) = std::env::var(name) {
+                if !host.trim().is_empty() {
+                    allowed_hosts.push(host);
+                }
+            }
+        }
+
+        if allowed_hosts.is_empty() {
+            allowed_hosts.push(defaults.allowed_host.clone());
+        }
+        let allowed_host = allowed_hosts.join(",");
 
         Self {
             session_secure,
@@ -138,6 +168,19 @@ fn asset(body: &'static str, content_type: &'static str) -> axum::response::Resp
             (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
         ],
         body,
+    )
+        .into_response()
+}
+
+/// Serves a raster app icon from the binary with a long cache life.
+fn image_asset(body: &'static [u8]) -> Response {
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "image/png"),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+        ],
+        axum::body::Body::from(body),
     )
         .into_response()
 }
@@ -294,12 +337,24 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             get(|| std::future::ready(asset(MANIFEST_JSON, "application/json"))),
         )
         .route(
-            "/static/icons/icon-192x192.svg",
-            get(|| std::future::ready(asset(ICON_192_SVG, "image/svg+xml"))),
+            "/static/brand-mark.svg",
+            get(|| std::future::ready(asset(BRAND_MARK_SVG, "image/svg+xml"))),
         )
         .route(
-            "/static/icons/icon-512x512.svg",
-            get(|| std::future::ready(asset(ICON_512_SVG, "image/svg+xml"))),
+            "/static/icons/icon-180x180.png",
+            get(|| std::future::ready(image_asset(ICON_180_PNG))),
+        )
+        .route(
+            "/static/icons/icon-192x192.png",
+            get(|| std::future::ready(image_asset(ICON_192_PNG))),
+        )
+        .route(
+            "/static/icons/icon-512x512.png",
+            get(|| std::future::ready(image_asset(ICON_512_PNG))),
+        )
+        .route(
+            "/static/icons/icon-512-maskable.png",
+            get(|| std::future::ready(image_asset(ICON_512_MASKABLE_PNG))),
         )
         .route(
             "/static/vendor/htmx.min.js",

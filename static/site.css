@@ -249,6 +249,9 @@ a:focus-visible {
 }
 
 .header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
   font-family: var(--font-serif);
   font-weight: 700;
   font-size: var(--text-lg);
@@ -256,6 +259,12 @@ a:focus-visible {
   text-decoration: none;
   letter-spacing: -0.01em;
   white-space: nowrap;
+}
+.header__brand img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex: 0 0 auto;
 }
 .header__brand:hover {
   text-decoration: none;
