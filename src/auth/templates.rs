@@ -6,6 +6,11 @@
 
 use askama::Template;
 
+/// The public landing page — marketing copy with login and signup CTAs.
+#[derive(Template, Default)]
+#[template(path = "landing.html")]
+pub(crate) struct LandingTemplate;
+
 #[derive(Template, Default)]
 #[template(path = "signup.html")]
 pub(crate) struct SignupTemplate {

@@ -6,16 +6,17 @@
                 class="todo-toggle"
                 type="checkbox"
                 {% if todo.done %}checked{% endif %}
-                hx-post="/todos/{{ todo.id }}/toggle"
+                hx-post="/app/todos/{{ todo.id }}/toggle"
                 hx-target="#todo-list"
                 hx-swap="outerHTML"
+                aria-label="Mark {% if todo.done %}incomplete{% else %}complete{% endif %}: {{ todo.text }}"
             >
             <span class="is-sr-only">Mark as {% if todo.done %}not done{% else %}done{% endif %}</span>
         </label>
         <span class="todo-text">{{ todo.text }}</span>
         <button
             class="todo-delete button is-danger is-small"
-            hx-post="/todos/{{ todo.id }}/delete"
+            hx-post="/app/todos/{{ todo.id }}/delete"
             hx-target="#todo-list"
             hx-swap="outerHTML"
             hx-confirm="Delete this todo?"

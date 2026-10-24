@@ -20,6 +20,7 @@ pub use store::{
     DbStore, count_sessions_for_user, create_user, delete_sessions_for_user, find_user,
     set_password, user_id_by_email,
 };
+pub(crate) use templates::LandingTemplate;
 
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;

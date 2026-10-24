@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Create an account</title>
+    <title>Create an account · Todo List</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -13,9 +13,31 @@
     <link rel="stylesheet" href="/static/vendor/bulma.min.css">
     <link rel="stylesheet" href="/static/app.css">
     <script src="/static/password-toggle.js" defer></script>
+    <script src="/static/theme-toggle.js" defer></script>
 </head>
 <body class="has-gradient-page">
-    <main class="section">
+    <a href="#main-content" class="skip-link">Skip to signup form</a>
+
+    <header class="page__head">
+        <div class="container is-max-desktop">
+            <div class="level is-mobile">
+                <div class="level-left">
+                    <div class="level-item">
+                        <a href="/" class="page__brand">Todo List</a>
+                    </div>
+                </div>
+                <div class="level-right">
+                    <div class="level-item">
+                        <button class="theme-toggle button is-small" aria-label="Toggle dark mode" title="Toggle dark mode">
+                            <span class="theme-toggle-icon">🌙</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" class="section">
         <div class="container is-max-desktop">
             <div class="columns is-centered">
                 <div class="column is-half-tablet is-one-third-desktop auth-box">

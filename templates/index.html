@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Todos</title>
+    <title>Todos · Todo List</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -13,29 +13,44 @@
     <link rel="stylesheet" href="/static/vendor/bulma.min.css">
     <link rel="stylesheet" href="/static/app.css">
     <script src="/static/vendor/htmx.min.js" defer></script>
+    <script src="/static/theme-toggle.js" defer></script>
 </head>
 <body class="has-gradient-page">
-    <main class="section">
+    <a href="#main-content" class="skip-link">Skip to your tasks</a>
+
+    <header class="page__head">
         <div class="container is-max-desktop">
-            <header class="page__head">
-                <div class="level">
-                    <div class="level-left">
-                        <div>
-                            <p class="page__sub">Your tasks · {{ email }}</p>
-                            <h1 class="page__title">Todos</h1>
-                        </div>
+            <div class="level is-mobile">
+                <div class="level-left">
+                    <div class="level-item">
+                        <a href="/" class="page__brand">Todo List</a>
                     </div>
-                    <div class="level-right">
-                        {# Logout is a POST so another site cannot end this session
-                           with an <img src="/logout">; a plain link would allow it. #}
+                    <div class="level-item">
+                        <p class="page__sub">Your tasks · {{ email }}</p>
+                        <h1 class="page__title">Todos</h1>
+                    </div>
+                </div>
+                <div class="level-right">
+                    <div class="level-item">
+                        <button class="theme-toggle button is-small" aria-label="Toggle dark mode" title="Toggle dark mode">
+                            <span class="theme-toggle-icon">🌙</span>
+                        </button>
+                    </div>
+                    <div class="level-item">
                         <form method="post" action="/logout">
                             <button class="button is-small is-light" type="submit">Log out</button>
                         </form>
+                    </div>
+                    <div class="level-item">
                         <a class="button is-small" href="/account/password">Account</a>
                     </div>
                 </div>
-            </header>
+            </div>
+        </div>
+    </header>
 
+    <main id="main-content" class="section" aria-label="Todo list">
+        <div class="container is-max-desktop">
             {% include "todo_panel.html" %}
         </div>
     </main>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Todo List — Track your tasks, your way</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+    >
+    <link rel="stylesheet" href="/static/vendor/bulma.min.css">
+    <link rel="stylesheet" href="/static/app.css">
+    <script src="/static/vendor/htmx.min.js" defer></script>
+    <script src="/static/theme-toggle.js" defer></script>
+</head>
+<body class="has-gradient-page">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <header class="page__head">
+        <div class="container is-max-desktop">
+            <div class="level is-mobile">
+                <div class="level-left">
+                    <div class="level-item">
+                        <a href="/" class="page__brand">
+                            <span class="visually-hidden">Todo List</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="level-right">
+                    <div class="level-item">
+                        <button class="theme-toggle button is-small" aria-label="Toggle dark mode" title="Toggle dark mode">
+                            <span class="theme-toggle-icon">🌙</span>
+                        </button>
+                    </div>
+                    <div class="level-item">
+                        <a href="/login" class="button is-primary">Log in</a>
+                    </div>
+                    <div class="level-item">
+                        <a href="/signup" class="button is-primary">Sign up</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" class="section">
+        <div class="container is-max-desktop">
+            <div class="columns is-centered">
+                <div class="column is-three-fifths-tablet is-half-desktop is-one-third-widescreen">
+                    <div class="box has-text-centered">
+                        <h1 class="title is-1 page__title">Track your tasks.<br>Own your day.</h1>
+                        <p class="subtitle is-4 page__sub mb-6">
+                            A simple, private todo list built for people who want to get things done —
+                            without the clutter.
+                        </p>
+
+                        <div class="field is-grouped is-grouped-centered">
+                            <div class="control">
+                                <a href="/login" class="button is-primary is-large">Log in</a>
+                            </div>
+                            <div class="control">
+                                <a href="/signup" class="button is-primary is-large">Sign up</a>
+                            </div>
+                        </div>
+
+                        <hr class="my-6">
+
+                        <h2 class="title is-5 has-text-weight-medium mb-4">What you get</h2>
+                        <ul class="mb-6">
+                            <li class="mb-2">✓ Add, toggle, and delete tasks in seconds</li>
+                            <li class="mb-2">✓ Your list is private — tied to your account, not your browser</li>
+                            <li class="mb-2">✓ Light and dark mode, on any device</li>
+                            <li class="mb-2">✓ Log out everywhere with one click</li>
+                        </ul>
+
+                        <p class="has-text-grey is-small">
+                            Already have an account?
+                            <a href="/login" class="has-text-weight-semibold">Log in</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="page__foot mt-8">
+        <div class="container is-max-desktop">
+            <div class="content has-text-centered">
+                <p class="is-small has-text-grey">
+                    &copy; 2026 Todo List. Built with Axum, htmx, and Bulma.
+                </p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

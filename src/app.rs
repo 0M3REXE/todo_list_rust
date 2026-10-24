@@ -29,7 +29,7 @@ use axum::{
     extract::Request,
     http::{StatusCode, header},
     middleware::{self, Next},
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
     routing::get,
     Router,
 };
@@ -38,13 +38,18 @@ use axum_login::{
     tower_sessions::{Expiry, SessionManagerLayer, cookie::SameSite, ExpiredDeletion},
 };
 
-use crate::auth::{self, AuthBackend, DbStore};
+use crate::auth::{self, AuthBackend, AuthSession, DbStore};
 use crate::db::Db;
+use crate::AppError;
+
+use askama::Template as _;
 
 /// The app stylesheet.
 pub static APP_CSS: &str = include_str!("../static/app.css");
 /// The small in-house script for the password fields.
 pub static PASSWORD_TOGGLE_JS: &str = include_str!("../static/password-toggle.js");
+/// Theme toggle: light/dark mode persistence.
+pub static THEME_TOGGLE_JS: &str = include_str!("../static/theme-toggle.js");
 /// Vendored Bulma, unmodified.
 pub static BULMA_CSS: &str = include_str!("../static/vendor/bulma.min.css");
 /// Vendored htmx, unmodified.
@@ -138,6 +143,21 @@ async fn cache_control(req: Request, next: Next) -> Response {
     response
 }
 
+/// The landing page. Public — no session required. A logged-in visitor is
+/// sent straight to their todo app; everyone else sees the marketing page
+/// with login and signup buttons.
+async fn landing(session: AuthSession) -> Result<Response, AppError> {
+    if session.user.is_some() {
+        return Ok(Redirect::to("/app").into_response());
+    }
+    Ok(Html(
+        crate::auth::LandingTemplate::default()
+            .render()
+            .map_err(|err| AppError::Render(err))?,
+    )
+    .into_response())
+}
+
 /// Builds the whole application: routes, session layer, auth layer, CSRF check.
 pub fn build_app(db: Db, config: AppConfig) -> Router {
     let session_layer = SessionManagerLayer::new(DbStore::new(db.clone()))
@@ -157,12 +177,18 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .with_data_key(crate::auth::AUTH_DATA_KEY)
         .build();
 
+    // The todo app lives under /app so the landing page can own /.
+    let todo_app = crate::todo::build_router(db.clone());
+
     Router::new()
-        // Public first, then the guarded todo routes. `route_layer` inside
-        // `todo::build_router` is what keeps the guard off the auth pages.
+        // Public first: landing page, then auth pages.
+        .route("/", get(landing))
         .merge(auth::routes(db.clone()))
         .merge(auth::account_routes(db.clone()))
-        .merge(crate::todo::build_router(db))
+        // The todo app is nested under /app so its internal routes (/,
+        // /todos, /todos/{id}/toggle, /todos/{id}/delete) become
+        // /app/, /app/todos, etc.
+        .nest("/app", todo_app)
         .route("/healthz", get(|| async { "ok" }))
         .route(
             "/static/app.css",
@@ -171,6 +197,10 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route(
             "/static/password-toggle.js",
             get(|| std::future::ready(asset(PASSWORD_TOGGLE_JS, "text/javascript"))),
+        )
+        .route(
+            "/static/theme-toggle.js",
+            get(|| std::future::ready(asset(THEME_TOGGLE_JS, "text/javascript"))),
         )
         .route(
             "/static/vendor/bulma.min.css",
