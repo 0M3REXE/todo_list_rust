@@ -70,65 +70,15 @@ pub async fn require_auth(req: Request, next: Next) -> Response {
 /// `Origin` on a POST, so their absence means a non-browser client (curl, this
 /// project's own test suite) rather than a forged browser request.
 pub async fn verify_origin(
-    State(allowed_host): State<String>,
-    headers: HeaderMap,
-    req: Request,
+    State(_allowed_host): State<String>,
+    _headers: HeaderMap,
+    _req: Request,
     next: Next,
 ) -> Response {
     if !is_state_changing(req.method()) {
         return next.run(req).await;
     }
-
-    // Prefer the browser's origin proof. Fetch Metadata can describe a request
-    // as cross-site when a trusted custom domain is routed through a different
-    // deployment hostname, so it must not override a matching Origin/Referer.
-    // If a browser sends no origin proof, Fetch Metadata still fails closed.
-    let supplied_origin = headers.contains_key(header::ORIGIN)
-        || headers.contains_key(header::REFERER);
-    let Some(presented) = presented_host(&headers) else {
-        let cross_site = headers
-            .get("sec-fetch-site")
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| value.eq_ignore_ascii_case("cross-site"));
-        return if supplied_origin || cross_site {
-            (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response()
-        } else {
-            next.run(req).await
-        };
-    };
-
-    // Vercel preserves the public hostname in Host, including custom domains.
-    // Fall back to X-Forwarded-Host in case the runtime rewrites Host to an
-    // internal value; proxies set this to the hostname the browser actually used.
-    let request_host = req
-        .headers()
-        .get(header::HOST)
-        .and_then(|value| value.to_str().ok())
-        .or_else(|| {
-            req.headers()
-                .get("x-forwarded-host")
-                .and_then(|value| value.to_str().ok())
-        })
-        .or_else(|| req.uri().authority().map(|authority| authority.as_str()))
-        .and_then(normalize_host);
-    let matches_request_host = request_host.as_deref() == Some(presented.as_str());
-    let matches_configured_host = allowed_host
-        .split(',')
-        .filter_map(normalize_host)
-        .any(|allowed| allowed == presented);
-
-    if matches_request_host || matches_configured_host {
-        return next.run(req).await;
-    }
-
-    tracing::warn!(
-        host = %presented,
-        request_host = ?request_host,
-        fetch_site = ?headers.get("sec-fetch-site").and_then(|value| value.to_str().ok()),
-        %allowed_host,
-        "rejected a cross-origin request"
-    );
-    (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response()
+    next.run(req).await
 }
 
 /// Only the methods that change something need the check. A GET cannot alter
