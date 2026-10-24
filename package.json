@@ -5,6 +5,7 @@
   },
   "scripts": {
     "css:build": "tailwindcss -i ./static/tailwind.css -o ./static/app.css --minify",
-    "css:watch": "tailwindcss -i ./static/tailwind.css -o ./static/app.css --watch"
+    "css:watch": "tailwindcss -i ./static/tailwind.css -o ./static/app.css --watch",
+    "vercel-build": "bash build.sh"
   }
 }

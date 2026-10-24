@@ -98,10 +98,17 @@ pub async fn verify_origin(
     };
 
     // Vercel preserves the public hostname in Host, including custom domains.
+    // Fall back to X-Forwarded-Host in case the runtime rewrites Host to an
+    // internal value; proxies set this to the hostname the browser actually used.
     let request_host = req
         .headers()
         .get(header::HOST)
         .and_then(|value| value.to_str().ok())
+        .or_else(|| {
+            req.headers()
+                .get("x-forwarded-host")
+                .and_then(|value| value.to_str().ok())
+        })
         .or_else(|| req.uri().authority().map(|authority| authority.as_str()))
         .and_then(normalize_host);
     let matches_request_host = request_host.as_deref() == Some(presented.as_str());

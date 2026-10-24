@@ -88,6 +88,11 @@ pub struct AppConfig {
     /// The request's own Host is also checked, so Vercel preview and custom
     /// domains work without trusting arbitrary origins.
     pub allowed_host: String,
+    /// Optional signing key for the session cookie. When set, the cookie is
+    /// cryptographically signed so a client cannot tamper with or forge it.
+    /// Sessions are server-side, so this is defense-in-depth, not the sole
+    /// protection.
+    pub session_secret: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -96,6 +101,7 @@ impl Default for AppConfig {
             // Secure by default: forgetting to set it should fail closed.
             session_secure: true,
             allowed_host: "localhost:3000".to_owned(),
+            session_secret: None,
         }
     }
 }
@@ -139,9 +145,12 @@ impl AppConfig {
         }
         let allowed_host = allowed_hosts.join(",");
 
+        let session_secret = std::env::var("SESSION_SECRET").ok();
+
         Self {
             session_secure,
             allowed_host,
+            session_secret,
         }
     }
 }
@@ -254,15 +263,7 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .with_secure(config.session_secure)
         .with_expiry(Expiry::OnInactivity(SESSION_IDLE_LIFETIME));
 
-    let auth_layer = AuthManagerLayerBuilder::new(AuthBackend { db: db.clone() }, session_layer)
-        // Named rather than left to axum-login's default, because the
-        // session store reads the account id back out from under this key.
-        .with_data_key(crate::auth::AUTH_DATA_KEY)
-        .build();
-
-    // The todo app lives under /app so the landing page can own /.
-    let todo_app = crate::todo::build_router(db.clone());
-    let mut app = Router::new()
+    let app = Router::new()
         // Public first: landing page, then auth pages.
         .route("/", get(landing))
         .merge(auth::routes(db.clone()))
@@ -270,7 +271,7 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         // The todo app is nested under /app so its internal routes (/,
         // /todos, /todos/{id}/toggle, /todos/{id}/delete) become
         // /app/, /app/todos, etc.
-        .nest("/app", todo_app)
+        .nest("/app", crate::todo::build_router(db.clone()))
         .route("/healthz", get(|| async { "ok" }))
         .route(
             "/static/app.css",
@@ -347,8 +348,28 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .layer(middleware::from_fn_with_state(
             config.allowed_host.clone(),
             auth::verify_origin,
-        ))
-        .layer(auth_layer)
+        ));
+
+    // Apply the auth layer. When SESSION_SECRET is configured, the session
+    // cookie is cryptographically signed so a client cannot tamper with it.
+    // Sessions are server-side, so this is defense-in-depth.
+    let app = if let Some(secret) = &config.session_secret {
+        let key = tower_sessions::cookie::Key::try_from(secret.as_bytes())
+            .expect("SESSION_SECRET must produce a valid signing key");
+        app.layer(
+            AuthManagerLayerBuilder::new(AuthBackend { db: db.clone() }, session_layer.with_signed(key))
+                .with_data_key(crate::auth::AUTH_DATA_KEY)
+                .build(),
+        )
+    } else {
+        app.layer(
+            AuthManagerLayerBuilder::new(AuthBackend { db: db.clone() }, session_layer)
+                .with_data_key(crate::auth::AUTH_DATA_KEY)
+                .build(),
+        )
+    };
+
+    let mut app = app
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY))
         .layer(CompressionLayer::new())
         .layer(SetResponseHeaderLayer::overriding(
