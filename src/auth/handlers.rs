@@ -102,7 +102,9 @@ async fn signup(
         .map_err(|err| AppError::Session(err.to_string()))?;
 
     tracing::info!(user.id = user.id, "account created");
-    Ok(Redirect::to("/").into_response())
+    // Straight to the list: `/` immediately redirects logged-in users to
+    // `/app` anyway, so this saves the extra round trip.
+    Ok(Redirect::to("/app").into_response())
 }
 
 fn check_confirmation(form: &SignupForm) -> Result<(), &'static str> {

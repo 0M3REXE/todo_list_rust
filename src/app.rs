@@ -55,6 +55,9 @@ use askama::Template as _;
 pub static APP_CSS: &str = include_str!("../static/app.css");
 /// The small in-house script for the password fields.
 pub static PASSWORD_TOGGLE_JS: &str = include_str!("../static/password-toggle.js");
+/// Theme preload: applies the saved theme before the stylesheet paints.
+/// Render-blocking on purpose; see the file's own header comment.
+pub static THEME_INIT_JS: &str = include_str!("../static/theme-init.js");
 /// Theme toggle: light/dark mode persistence.
 pub static THEME_TOGGLE_JS: &str = include_str!("../static/theme-toggle.js");
 /// Keyboard shortcuts + client-side search filter.
@@ -280,6 +283,10 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route(
             "/static/password-toggle.js",
             get(|| std::future::ready(asset(PASSWORD_TOGGLE_JS, "text/javascript"))),
+        )
+        .route(
+            "/static/theme-init.js",
+            get(|| std::future::ready(asset(THEME_INIT_JS, "text/javascript"))),
         )
         .route(
             "/static/theme-toggle.js",

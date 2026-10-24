@@ -3,6 +3,5 @@
 /.superpowers
 .env
 /.sqlx
-/docs
 /.freebuff
 /practice.db

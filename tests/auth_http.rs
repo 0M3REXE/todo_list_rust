@@ -61,7 +61,7 @@ async fn signup_creates_the_account_and_signs_you_in() {
         .await;
 
     assert_eq!(status, StatusCode::SEE_OTHER);
-    assert_eq!(destination, "/", "a fresh signup lands on the list");
+    assert_eq!(destination, "/app", "a fresh signup lands on the list");
 
     // "Signed in" means two things: a session cookie...
     assert!(

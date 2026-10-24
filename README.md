@@ -11,7 +11,6 @@ $env:SESSION_SECURE = "false"
 $env:APP_ALLOWED_HOST = "127.0.0.1:3000,localhost:3000"
 cargo run
 ```
-gfjghj
 
 The development database is created and migrated automatically. To use Turso instead, set `DATABASE_URL` to a `libsql://` URL and `DATABASE_AUTH_TOKEN` to its token. Never commit either secret.
 

@@ -954,19 +954,8 @@ html[data-theme="dark"] .theme-icon--sun { display: block; }
 .todo-list { margin-inline: calc(-1 * var(--sp-5)); }
 
 /* --------------------------------------------------------------------------
-   Alpine.js transitions
+   htmx transitions
    -------------------------------------------------------------------------- */
-
-/* Fade in/out for items */
-[x-cloak] { display: none !important; }
-
-.fade-enter {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-.fade-enter-active {
-  transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
-}
 
 /* htmx loading indicator */
 .htmx-request .btn--primary {
