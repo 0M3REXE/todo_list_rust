@@ -50,6 +50,8 @@ pub static APP_CSS: &str = include_str!("../static/app.css");
 pub static PASSWORD_TOGGLE_JS: &str = include_str!("../static/password-toggle.js");
 /// Theme toggle: light/dark mode persistence.
 pub static THEME_TOGGLE_JS: &str = include_str!("../static/theme-toggle.js");
+/// Keyboard shortcuts + client-side search filter.
+pub static KEYBOARD_JS: &str = include_str!("../static/keyboard.js");
 /// Service worker for offline PWA support.
 pub static SERVICE_WORKER_JS: &str = include_str!("../static/service-worker.js");
 /// Web app manifest for PWA installation.
@@ -205,6 +207,10 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route(
             "/static/theme-toggle.js",
             get(|| std::future::ready(asset(THEME_TOGGLE_JS, "text/javascript"))),
+        )
+        .route(
+            "/static/keyboard.js",
+            get(|| std::future::ready(asset(KEYBOARD_JS, "text/javascript"))),
         )
         .route(
             "/static/service-worker.js",
