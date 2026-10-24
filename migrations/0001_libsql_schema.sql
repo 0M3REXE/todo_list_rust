@@ -10,7 +10,7 @@
 -- is decided by a plain string comparison, and "less than" only agrees with
 -- time when every value has the same shape. Rust sets every timestamp itself,
 -- so SQLite needs no datetime function and none is used.
-create table users (
+create table if not exists users (
     id            integer primary key autoincrement,
     email         text not null,
     password_hash text not null,
@@ -22,14 +22,14 @@ create table users (
 -- Uniqueness is decided on lower(email): "Alice@example.com" and
 -- "alice@example.com" are one account without rewriting the stored value, so
 -- what the user sees is what we kept.
-create unique index users_email_key on users (lower(email));
+create unique index if not exists users_email_key on users (lower(email));
 
 -- Session records for tower-sessions, via the store in src/auth/store.rs.
 --
 -- `id` is a 128-bit random integer kept as text. `data` is the whole session
 -- record as JSON, in a plain text column — there is no jsonb type here, and
 -- the only reader is serde_json in Rust.
-create table sessions (
+create table if not exists sessions (
     id          text primary key,
     data        text not null,
     expiry_date text not null,
@@ -40,10 +40,10 @@ create table sessions (
     user_id     integer references users (id) on delete cascade
 );
 
-create index sessions_expiry_idx on sessions (expiry_date);
-create index sessions_user_id_idx on sessions (user_id);
+create index if not exists sessions_expiry_idx on sessions (expiry_date);
+create index if not exists sessions_user_id_idx on sessions (user_id);
 
-create table todos (
+create table if not exists todos (
     id      integer primary key autoincrement,
     text    text not null,
     done    integer not null default 0,
@@ -53,4 +53,4 @@ create table todos (
 );
 
 -- Every query filters by user_id before anything else, so it leads the index.
-create index todos_user_done_id_idx on todos (user_id, done, id);
+create index if not exists todos_user_done_id_idx on todos (user_id, done, id);

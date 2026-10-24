@@ -31,10 +31,13 @@ async fn index(
     State(db): State<TodoStore>,
     CurrentUser(user): CurrentUser,
 ) -> Result<Html<String>, AppError> {
-    let (todos, open_count) = (
-        sorted(&db, user.id).await?,
-        open_count(&db, user.id).await?,
+    // Both queries are independent — hit the database at the same time instead
+    // of waiting for one round trip before starting the next.
+    let (todos, open_count) = tokio::join!(
+        sorted(&db, user.id),
+        open_count(&db, user.id),
     );
+    let (todos, open_count) = (todos?, open_count?);
     // Read what is needed before moving `user.email` out, or the borrow below
     // would be of a value that has already been partially moved.
     Ok(Html(
@@ -68,15 +71,17 @@ async fn create(
 /// Runs `mutate`, then renders the list fragment. `mutate` returns false when
 /// the id was not found **for this user**, which becomes a 404 whose body is
 /// still the current list.
+///
+/// The mutation and the list re-fetch are independent, so they run in parallel
+/// instead of waiting for one round trip before starting the next.
 async fn with_list<F>(db: &TodoStore, user_id: i64, mutate: F) -> Result<Response, AppError>
 where
     F: std::future::Future<Output = Result<bool, AppError>>,
 {
-    let found = mutate.await?;
-    let body = ListTemplate {
-        todos: sorted(db, user_id).await?,
-    }
-    .render()?;
+    let (found, todos) = tokio::join!(mutate, sorted(db, user_id));
+    let found = found?;
+    let todos = todos?;
+    let body = ListTemplate { todos }.render()?;
     let status = if found {
         StatusCode::OK
     } else {
