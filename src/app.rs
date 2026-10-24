@@ -26,11 +26,12 @@
 use std::time::Duration as StdDuration;
 
 use axum::{
-    Router,
+    extract::Request,
     http::{StatusCode, header},
-    middleware,
-    response::IntoResponse,
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::get,
+    Router,
 };
 use axum_login::{
     AuthManagerLayerBuilder,
@@ -117,6 +118,26 @@ fn asset(body: &'static str, content_type: &'static str) -> axum::response::Resp
         .into_response()
 }
 
+/// Sets safe cache headers on dynamic responses.
+///
+/// Static assets already set their own long-lived immutable headers via
+/// `asset()`, so this middleware only touches responses that haven't
+/// specified a cache policy. User-specific HTML must never be stored by
+/// shared caches (CDNs, proxies), so we mark it `private`. `no-cache` means
+/// the browser can keep a copy but must revalidate with the server before
+/// using it — which, for a todo list that changes constantly, is the right
+/// tradeoff between speed and freshness.
+async fn cache_control(req: Request, next: Next) -> Response {
+    let mut response = next.run(req).await;
+    if response.headers().get(header::CACHE_CONTROL).is_none() {
+        let _ = response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            header::HeaderValue::from_static("private, no-cache, max-age=0"),
+        );
+    }
+    response
+}
+
 /// Builds the whole application: routes, session layer, auth layer, CSRF check.
 pub fn build_app(db: Db, config: AppConfig) -> Router {
     let session_layer = SessionManagerLayer::new(DbStore::new(db.clone()))
@@ -159,6 +180,9 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             "/static/vendor/htmx.min.js",
             get(|| std::future::ready(asset(HTMX_JS, "text/javascript"))),
         )
+        // Cache control wraps every route handler. Static assets already set
+        // their own headers via `asset()`, so this only touches dynamic HTML.
+        .layer(middleware::from_fn(cache_control))
         .layer(middleware::from_fn_with_state(
             config.allowed_host.clone(),
             auth::verify_origin,
