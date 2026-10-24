@@ -56,8 +56,6 @@ pub static KEYBOARD_JS: &str = include_str!("../static/keyboard.js");
 pub static SERVICE_WORKER_JS: &str = include_str!("../static/service-worker.js");
 /// Web app manifest for PWA installation.
 pub static MANIFEST_JSON: &str = include_str!("../static/manifest.json");
-/// Vendored Bulma, unmodified.
-pub static BULMA_CSS: &str = include_str!("../static/vendor/bulma.min.css");
 /// Vendored htmx, unmodified.
 pub static HTMX_JS: &str = include_str!("../static/vendor/htmx.min.js");
 
@@ -219,10 +217,6 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route(
             "/static/manifest.json",
             get(|| std::future::ready(asset(MANIFEST_JSON, "application/json"))),
-        )
-        .route(
-            "/static/vendor/bulma.min.css",
-            get(|| std::future::ready(asset(BULMA_CSS, "text/css"))),
         )
         .route(
             "/static/vendor/htmx.min.js",

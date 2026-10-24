@@ -10,7 +10,6 @@
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
     >
-    <link rel="stylesheet" href="/static/vendor/bulma.min.css">
     <link rel="stylesheet" href="/static/app.css">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#d4a033">
@@ -18,42 +17,42 @@
     <script src="/static/theme-toggle.js" defer></script>
     <script src="/static/keyboard.js" defer></script>
 </head>
-<body class="has-gradient-page">
+<body class="page min-h-screen bg-[var(--paper)] text-[var(--ink)] antialiased">
     <a href="#main-content" class="skip-link">Skip to your tasks</a>
 
-    <header class="page__head">
-        <div class="container is-max-desktop">
-            <div class="level is-mobile">
-                <div class="level-left">
-                    <div class="level-item">
-                        <a href="/" class="page__brand">Todo List</a>
+    <header class="shell header">
+        <div class="shell">
+            <div class="header__actions">
+                <div class="header__actions">
+                    <div >
+                        <a href="/" class="header__brand">Todo List</a>
                     </div>
-                    <div class="level-item">
-                        <p class="page__sub">Your tasks · {{ email }}</p>
-                        <h1 class="page__title">Todos</h1>
+                    <div >
+                        <p class="todo-header__email">Your tasks · {{ email }}</p>
+                        <h1 class="todo-header__title">Todos</h1>
                     </div>
                 </div>
-                <div class="level-right">
-                    <div class="level-item">
-                        <button class="theme-toggle button is-small" aria-label="Toggle dark mode" title="Toggle dark mode">
+                <div class="header__actions">
+                    <div >
+                        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
                             <span class="theme-toggle-icon">🌙</span>
                         </button>
                     </div>
-                    <div class="level-item">
+                    <div >
                         <form method="post" action="/logout">
-                            <button class="button is-small is-light" type="submit">Log out</button>
+                            <button class="btn btn--ghost btn--sm" type="submit">Log out</button>
                         </form>
                     </div>
-                    <div class="level-item">
-                        <a class="button is-small" href="/account/password">Account</a>
+                    <div >
+                        <a class="btn btn--ghost btn--sm" href="/account/password">Account</a>
                     </div>
                 </div>
             </div>
         </div>
     </header>
 
-    <main id="main-content" class="section" aria-label="Todo list">
-        <div class="container is-max-desktop">
+    <main id="main-content" class="page__main" aria-label="Todo list">
+        <div class="shell">
             {% include "todo_panel.html" %}
         </div>
     </main>

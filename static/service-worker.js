@@ -1,13 +1,12 @@
 // Service worker — offline shell for the Todo List PWA.
 // Caches static assets + page shells so the app loads offline.
 
-var CACHE_NAME = 'todo-v1';
+var CACHE_NAME = 'todo-v2';
 var STATIC_ASSETS = [
   '/',
   '/app',
   '/login',
   '/signup',
-  '/static/vendor/bulma.min.css',
   '/static/vendor/htmx.min.js',
   '/static/app.css',
   '/static/theme-toggle.js',
