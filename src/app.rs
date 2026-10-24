@@ -127,6 +127,19 @@ fn asset(body: &'static str, content_type: &'static str) -> axum::response::Resp
         .into_response()
 }
 
+/// The stylesheet keeps a stable URL so new deployments must revalidate it.
+fn stylesheet() -> Response {
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/css"),
+            (header::CACHE_CONTROL, "public, max-age=0, must-revalidate"),
+        ],
+        APP_CSS,
+    )
+        .into_response()
+}
+
 /// Sets safe cache headers on dynamic responses.
 ///
 /// Static assets already set their own long-lived immutable headers via
@@ -196,7 +209,7 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route("/healthz", get(|| async { "ok" }))
         .route(
             "/static/app.css",
-            get(|| std::future::ready(asset(APP_CSS, "text/css"))),
+            get(|| std::future::ready(stylesheet())),
         )
         .route(
             "/static/password-toggle.js",
