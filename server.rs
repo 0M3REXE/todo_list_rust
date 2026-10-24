@@ -36,13 +36,7 @@ async fn main() {
     // Cold-start fail-fast: a database that will not open would fail every
     // request anyway, so it is clearer to fail the boot and let Vercel report
     // the startup error than to serve a half-initialised lambda.
-    let config = match app::AppConfig::from_env() {
-        Ok(config) => config,
-        Err(err) => {
-            tracing::error!(%err, "invalid application configuration");
-            std::process::exit(1);
-        }
-    };
+    let config = app::AppConfig::from_env();
 
     let database = match db::open_from_env().await {
         Ok(db) => db,

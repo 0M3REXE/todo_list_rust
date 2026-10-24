@@ -15,7 +15,7 @@ use libsql::Error;
 use sha2::{Digest, Sha256};
 
 use axum_login::tower_sessions::{
-    ExpiredDeletion, SessionStore,
+    SessionStore,
     session::{Id, Record},
     session_store::{Error as SessionError, Result as SessionResult},
 };
@@ -270,28 +270,6 @@ impl SessionStore for DbStore {
     }
 }
 
-#[async_trait]
-impl ExpiredDeletion for DbStore {
-    async fn delete_expired(&self) -> SessionResult<()> {
-        db::execute(
-            &self.db,
-            "delete from sessions where expiry_date <= ?1",
-            vec![db::ps(db::now_ts())],
-        )
-        .await
-        .map_err(backend)?;
-        let oldest_window = time::OffsetDateTime::now_utc().unix_timestamp() - 24 * 60 * 60;
-        db::execute(
-            &self.db,
-            "delete from auth_rate_limits where window_start < ?1",
-            vec![db::pi(oldest_window)],
-        )
-        .await
-        .map_err(backend)?;
-        Ok(())
-    }
-}
-
 /// Throws away every session belonging to an account, returning how many went.
 ///
 /// This is the "log out everywhere" and "my password changed" primitive. It
@@ -337,6 +315,14 @@ pub async fn allow_auth_attempt(
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect();
+
+    // Discard expired rate-limit buckets opportunistically; no scheduled job is needed.
+    db::execute(
+        db,
+        "delete from auth_rate_limits where window_start < ?1",
+        vec![db::pi(now - 24 * 60 * 60)],
+    )
+    .await?;
 
     let attempts = db::scalar_i64(
         db,

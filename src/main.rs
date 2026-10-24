@@ -15,7 +15,6 @@ use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const SHUTDOWN_DEADLINE: Duration = Duration::from_secs(30);
-const CLEANUP_STOP_DEADLINE: Duration = Duration::from_secs(2);
 
 #[tokio::main]
 async fn main() {
@@ -29,19 +28,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = match app::AppConfig::from_env() {
-        Ok(config) => config,
-        Err(err) => {
-            tracing::error!(%err, "invalid application configuration");
-            std::process::exit(1);
-        }
-    };
+    let config = app::AppConfig::from_env();
     let pool = connect_db().await;
-
-    // Started before the listener so a boot-time database problem is caught
-    // here rather than on the first request that needs a session.
-    let cleanup = app::spawn_session_cleanup(practice::auth::DbStore::new(pool.clone()));
-
     let app = app::build_app(pool, config);
 
     // Nothing below this point can recover, so bind and serve failures log the
@@ -85,15 +73,6 @@ async fn main() {
             tokio::time::timeout(SHUTDOWN_DEADLINE, &mut server).await.ok()
         }
     };
-
-    // The listener has closed; nothing else can arrive, so the cleanup task can
-    // be told to finish instead of being killed with the process.
-    if tokio::time::timeout(CLEANUP_STOP_DEADLINE, cleanup.stop())
-        .await
-        .is_err()
-    {
-        tracing::warn!("session cleanup task did not stop before the deadline");
-    }
 
     match served {
         Some(Ok(())) => {}

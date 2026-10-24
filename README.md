@@ -28,7 +28,7 @@ Use `npm run css:watch` while editing styles. The vendored `static/vendor/htmx.m
 
 ## Deploy to Vercel
 
-Configure `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SESSION_SECURE=true`, and a random `CRON_SECRET` of at least 16 characters. The daily Vercel cron uses the secret to authorize expired-session cleanup. Add custom trusted domains to `APP_ALLOWED_HOST` only when needed; Vercel deployment hostnames are included automatically.
+Configure `DATABASE_URL` and `DATABASE_AUTH_TOKEN` for the Turso database. HTTPS deployments automatically use secure session cookies. Add custom trusted domains to `APP_ALLOWED_HOST` only when needed; Vercel deployment hostnames are included automatically.
 
 ## Account limitations
 

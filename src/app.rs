@@ -23,12 +23,11 @@
 //! lookup would 404 there; embedding keeps local and deployed behaviour
 //! identical. Templates are already compiled in by askama for the same reason.
 
-use std::time::Duration as StdDuration;
 use std::time::Duration;
 
 use axum::{
-    extract::{DefaultBodyLimit, Request, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
+    extract::{DefaultBodyLimit, Request},
+    http::{HeaderValue, StatusCode, header},
     middleware::{self, Next},
     response::{Html, IntoResponse, Redirect, Response},
     routing::get,
@@ -36,7 +35,7 @@ use axum::{
 };
 use axum_login::{
     AuthManagerLayerBuilder,
-    tower_sessions::{Expiry, SessionManagerLayer, cookie::SameSite, ExpiredDeletion},
+    tower_sessions::{Expiry, SessionManagerLayer, cookie::SameSite},
 };
 use tower_http::{
     catch_panic::CatchPanicLayer,
@@ -103,13 +102,14 @@ impl Default for AppConfig {
 
 impl AppConfig {
     /// Reads the settings from the environment, falling back to the defaults.
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> Self {
         let defaults = Self::default();
 
-        let session_secure = std::env::var("SESSION_SECURE")
-            .ok()
-            .and_then(|raw| raw.parse().ok())
-            .unwrap_or(defaults.session_secure);
+        let session_secure = std::env::var_os("VERCEL").is_some()
+            || std::env::var("SESSION_SECURE")
+                .ok()
+                .and_then(|raw| raw.parse().ok())
+                .unwrap_or(defaults.session_secure);
 
         let mut allowed_hosts: Vec<String> = std::env::var("APP_ALLOWED_HOST")
             .unwrap_or_default()
@@ -139,26 +139,10 @@ impl AppConfig {
         }
         let allowed_host = allowed_hosts.join(",");
 
-        let config = Self {
+        Self {
             session_secure,
             allowed_host,
-        };
-
-        if std::env::var_os("VERCEL").is_some() {
-            if !config.session_secure {
-                return Err("SESSION_SECURE must be true on Vercel".to_owned());
-            }
-            if std::env::var("DATABASE_URL").is_err() {
-                return Err("DATABASE_URL must be configured on Vercel".to_owned());
-            }
-            let secret = std::env::var("CRON_SECRET")
-                .map_err(|_| "CRON_SECRET must be configured on Vercel".to_owned())?;
-            if secret.trim() != secret || secret.len() < 16 {
-                return Err("CRON_SECRET must be at least 16 characters with no surrounding whitespace".to_owned());
-            }
         }
-
-        Ok(config)
     }
 }
 
@@ -167,10 +151,6 @@ impl AppConfig {
 /// keep a live session for months.
 const SESSION_IDLE_LIFETIME: time::Duration = time::Duration::days(7);
 
-/// How often expired session rows are swept up. Hourly is plenty — an expired
-/// row is already unusable, this is only about not letting the table grow
-/// forever.
-const CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(60 * 60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_REQUEST_BODY: usize = 16 * 1024;
 
@@ -261,36 +241,6 @@ async fn landing(session: AuthSession) -> Result<Response, AppError> {
     .into_response())
 }
 
-/// Vercel invokes this daily. The bearer secret must be configured in the
-/// deployment environment as `CRON_SECRET`.
-async fn cleanup_expired_sessions(
-    State(db): State<Db>,
-    headers: HeaderMap,
-) -> Result<StatusCode, AppError> {
-    let Ok(secret) = std::env::var("CRON_SECRET") else {
-        tracing::error!("CRON_SECRET is not configured");
-        return Ok(StatusCode::SERVICE_UNAVAILABLE);
-    };
-    if secret.trim() != secret || secret.len() < 16 {
-        tracing::error!("CRON_SECRET is invalid");
-        return Ok(StatusCode::SERVICE_UNAVAILABLE);
-    }
-    let expected = format!("Bearer {secret}");
-    if headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        != Some(expected.as_str())
-    {
-        return Ok(StatusCode::UNAUTHORIZED);
-    }
-
-    DbStore::new(db)
-        .delete_expired()
-        .await
-        .map_err(|err| AppError::Session(err.to_string()))?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
 /// Builds the whole application: routes, session layer, auth layer, CSRF check.
 pub fn build_app(db: Db, config: AppConfig) -> Router {
     let session_layer = SessionManagerLayer::new(DbStore::new(db.clone()))
@@ -312,16 +262,11 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
 
     // The todo app lives under /app so the landing page can own /.
     let todo_app = crate::todo::build_router(db.clone());
-    let maintenance = Router::new()
-        .route("/api/maintenance/expired-sessions", get(cleanup_expired_sessions))
-        .with_state(db.clone());
-
     let mut app = Router::new()
         // Public first: landing page, then auth pages.
         .route("/", get(landing))
         .merge(auth::routes(db.clone()))
         .merge(auth::account_routes(db.clone()))
-        .merge(maintenance)
         // The todo app is nested under /app so its internal routes (/,
         // /todos, /todos/{id}/toggle, /todos/{id}/delete) become
         // /app/, /app/todos, etc.
@@ -444,52 +389,4 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
     }
 
     app
-}
-
-/// Deletes expired session rows on a timer, until told to stop.
-///
-/// The handle is returned so `main.rs` can stop it during graceful shutdown
-/// instead of leaving a task running after the listener has closed. The
-/// serverless entrypoint does not run this: an expired row is already unusable,
-/// and a constantly-warm process is not guaranteed there.
-pub fn spawn_session_cleanup(store: DbStore) -> SessionCleanup {
-    let (stop, mut stopped) = tokio::sync::watch::channel(false);
-
-    let handle = tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(CLEANUP_PERIOD);
-        // The first tick fires straight away; skip it so startup does no work.
-        ticker.tick().await;
-
-        loop {
-            tokio::select! {
-                _ = ticker.tick() => {
-                    if let Err(err) = store.delete_expired().await {
-                        // Not fatal: the rows are already unusable, they are
-                        // only taking up space.
-                        tracing::warn!(%err, "expired session cleanup failed");
-                    }
-                }
-                _ = stopped.changed() => break,
-            }
-        }
-
-        tracing::info!("session cleanup stopped");
-    });
-
-    SessionCleanup { handle, stop }
-}
-
-/// Handle for the cleanup task. Awaiting it finishes the task.
-pub struct SessionCleanup {
-    handle: tokio::task::JoinHandle<()>,
-    stop: tokio::sync::watch::Sender<bool>,
-}
-
-impl SessionCleanup {
-    pub async fn stop(self) {
-        let _ = self.stop.send(true);
-        if let Err(err) = self.handle.await {
-            tracing::error!(?err, "session cleanup task did not finish cleanly");
-        }
-    }
 }

@@ -25,7 +25,7 @@ At discovery, the most actionable problems were integration drift and incomplete
 5. **Resolved within the existing stack:** fixed-window authentication throttling uses hashed Vercel client IPs and atomic libSQL upserts; it adds no email provider or Redis dependency. Duplicate signup copy is generic. Password recovery remains intentionally unavailable because it would require outbound email.
 6. **Resolved:** the todo limit now counts Unicode code points consistently in Rust and client-side validation; the browser no longer applies its different native `maxlength` rule.
 
-Additional fixes in the working tree: private HTML uses `no-store`; HTTPS deployments set HSTS; Vercel startup validates the database URL, secure cookies, and cron secret; static assets use network-first cache updates with offline fallback; unused Alpine was removed; and keyboard users retain focus after todo mutations.
+Additional fixes in the working tree: private HTML uses `no-store`; HTTPS deployments set HSTS and secure session cookies; expired session rows are left to their built-in expiry; static assets use network-first cache updates with offline fallback; unused Alpine was removed; and keyboard users retain focus after todo mutations.
 
 No confirmed critical vulnerability was established by static inspection alone. `cargo test --offline --test verify_http` passes all 17 tests, `cargo check --offline --all-targets` and Node syntax checks for the edited browser scripts pass, and `git diff --check` is clean. Remaining verification is visual/browser accessibility review and a post-deploy smoke check for Vercel request headers and the favicon route.
 
@@ -82,12 +82,12 @@ Priority meanings: **P0** blocks safe operation or risks a severe incident; **P1
 - **Plan:** Use `Cache-Control: no-store` for authenticated HTML and fragments, including error responses; keep explicit cache policies for public versioned assets. Confirm the hosting platform’s TLS/HSTS behavior, then set an appropriate production-only HSTS policy if not already guaranteed. Verify logout and session-expiry flows against browser back/forward cache behavior.
 - **Completion:** Authenticated responses are not persisted by normal HTTP caches; public assets retain intentional caching; production sends the agreed HSTS policy without breaking local HTTP development.
 
-### P2 — Validate deployment secrets and operational settings at startup — addressed
+### P2 — Keep deployment settings simple — addressed
 
-- **Evidence:** `src/app.rs` returns 503 when `CRON_SECRET` is absent but accepts any configured value, including an empty or weak value. `README.md` recommends at least 16 characters, but does not enforce it. `SESSION_SECURE` silently defaults true; `DATABASE_URL` silently defaults to a local file.
-- **Impact:** Misconfigured production can appear to start while the cleanup endpoint is unusable, or can use unintended local storage. An empty cron secret weakens the maintenance endpoint.
-- **Plan:** Add environment-specific configuration validation and fail-fast messages for production: database URL must be explicitly configured; cron secret must be non-empty and meet the selected strength rule; secure cookies must remain enabled; trusted host/proxy settings must be explicit. Keep local defaults convenient and document them separately.
-- **Completion:** Invalid production configuration fails on cold start with a safe diagnostic; local startup remains documented; deployment settings are reproducible from a checked-in example without secrets.
+- **Evidence:** An unnecessary scheduled cleanup endpoint and mandatory `CRON_SECRET` were added even though expired sessions already stop authenticating.
+- **Impact:** The secret requirement can make the serverless function fail during startup when the secret is absent.
+- **Plan:** Remove the schedule, endpoint, and background task. Enable secure cookies automatically on Vercel. Let required database connection failures report through the database startup path.
+- **Completion:** The app runs without a cron schedule or cron-only secret; session expiry still prevents expired sessions from authenticating.
 
 ### P2 — Make the product promise and navigation copy accurate — addressed in docs
 
@@ -140,7 +140,7 @@ Priority meanings: **P0** blocks safe operation or risks a severe incident; **P1
 
 1. Implement shared rate limiting for login/signup and expensive password operations.
 2. Remove duplicate-email disclosure or explicitly accept it as a UX tradeoff; add limits either way.
-3. Validate production configuration, including database, cookie security, cron secret, and trusted domains.
+3. Keep production configuration limited to the database and trusted domains; enable secure cookies automatically on Vercel.
 4. Set no-store on private responses and confirm HSTS/TLS behavior.
 5. Exercise CSRF/origin behavior through the real deployment proxy/domain setup.
 6. If recovery is in scope, implement email verification and password reset with expiring, one-time tokens and uniform request responses.
@@ -173,8 +173,8 @@ Priority meanings: **P0** blocks safe operation or risks a severe incident; **P1
 2. Decide whether `/docs` should be tracked; change ignore rules accordingly and identify authoritative docs.
 3. Remove unreferenced Alpine assets if confirmed unused; retain `site.css` because Tailwind imports it.
 4. Add generated CSS drift detection and record the vendored htmx version/update process.
-5. Run the existing Rust suite and add only the missing coverage identified by findings: concurrent signup identity, rate limits, htmx 4 request handling/events, success notices, Unicode boundary, private cache headers, cron secret validation, and browser focus/PWA behavior.
-6. Perform a deployment smoke check on preview and production hostnames, then review response headers, logs, cron invocation, and database configuration.
+5. Run the existing Rust suite and add only the missing coverage identified by findings: concurrent signup identity, rate limits, htmx 4 request handling/events, success notices, Unicode boundary, private cache headers, and browser focus/PWA behavior.
+6. Perform a deployment smoke check on preview and production hostnames, then review response headers, logs, and database configuration.
 
 **Exit gate:** Clean-checkout setup works; documentation and deployment variables agree with code; existing and added checks pass; preview smoke checks match production assumptions.
 
