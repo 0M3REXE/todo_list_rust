@@ -72,7 +72,7 @@ pub async fn require_auth(req: Request, next: Next) -> Response {
 pub async fn verify_origin(
     State(_allowed_host): State<String>,
     _headers: HeaderMap,
-    _req: Request,
+    req: Request,
     next: Next,
 ) -> Response {
     if !is_state_changing(req.method()) {
