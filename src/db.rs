@@ -67,7 +67,15 @@ pub fn parse_ts(raw: &str) -> Result<OffsetDateTime, Error> {
 /// is fatal in the callers: serving against half a schema would fail later,
 /// less clearly.
 pub async fn open_from_env() -> Result<Db, Error> {
-    let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "file:practice.db".to_owned());
+    let url = match std::env::var("DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) if std::env::var_os("VERCEL").is_some() => {
+            return Err(Error::Misuse(
+                "DATABASE_URL must be configured on Vercel".to_owned(),
+            ));
+        }
+        Err(_) => "file:practice.db".to_owned(),
+    };
 
     let db = match url.as_str() {
         remote
@@ -110,7 +118,10 @@ pub async fn open_in_memory() -> Result<Db, Error> {
 /// the schema missing; `if not exists` and `insert or ignore` make both
 /// arrivals converge instead of one of them failing.
 pub async fn migrate(conn: &Db) -> Result<(), Error> {
-    const MIGRATIONS: &[(i64, &str)] = &[(1, include_str!("../migrations/0001_libsql_schema.sql"))];
+    const MIGRATIONS: &[(i64, &str)] = &[
+        (1, include_str!("../migrations/0001_libsql_schema.sql")),
+        (2, include_str!("../migrations/0002_auth_rate_limits.sql")),
+    ];
 
     conn.execute(
         "create table if not exists _migrations (

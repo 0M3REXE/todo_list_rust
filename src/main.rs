@@ -29,8 +29,14 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let config = match app::AppConfig::from_env() {
+        Ok(config) => config,
+        Err(err) => {
+            tracing::error!(%err, "invalid application configuration");
+            std::process::exit(1);
+        }
+    };
     let pool = connect_db().await;
-    let config = app::AppConfig::from_env();
 
     // Started before the listener so a boot-time database problem is caught
     // here rather than on the first request that needs a session.

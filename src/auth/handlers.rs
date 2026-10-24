@@ -11,7 +11,7 @@ use askama::Template as _;
 use axum::{
     Form, Router,
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
@@ -63,9 +63,20 @@ struct SignupForm {
 async fn signup(
     State(db): State<Db>,
     mut session: AuthSession,
+    headers: HeaderMap,
     Form(form): Form<SignupForm>,
 ) -> Result<Response, AppError> {
     let email = form.email.trim().to_lowercase();
+
+    if let Some(retry_after) = rate_limit_delay(&db, &headers, "signup", 5, 60 * 60).await? {
+        return Ok(rate_limited(
+            render_signup_error(
+                &email,
+                "Too many signup attempts. Please try again later.",
+            ),
+            retry_after,
+        ));
+    }
 
     let rejection = validate_email(&email)
         .and_then(|()| check_confirmation(&form))
@@ -81,7 +92,7 @@ async fn signup(
     let Some(user) = store::create_user(&db, &email, &hash).await? else {
         return Ok(render_signup_error(
             &email,
-            "That email is already registered.",
+            "Could not create that account. If you already signed up, log in instead.",
         ));
     };
 
@@ -128,6 +139,12 @@ struct LoginQuery {
     next: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct AccountQuery {
+    changed: Option<String>,
+    logged_out: Option<String>,
+}
+
 async fn login_form(Query(query): Query<LoginQuery>) -> Result<Html<String>, AppError> {
     Ok(Html(
         templates::LoginTemplate {
@@ -146,9 +163,18 @@ struct LoginForm {
 }
 
 async fn login(
+    State(db): State<Db>,
+    headers: HeaderMap,
     mut session: AuthSession,
     Form(form): Form<LoginForm>,
 ) -> Result<Response, AppError> {
+    if let Some(retry_after) = rate_limit_delay(&db, &headers, "login", 20, 15 * 60).await? {
+        return Ok(rate_limited(
+            render_login_error(&form.next, "Too many login attempts. Please try again later."),
+            retry_after,
+        ));
+    }
+
     let outcome = session
         .authenticate(super::Credentials {
             email: form.email,
@@ -223,14 +249,22 @@ async fn logout(mut session: AuthSession) -> Result<Response, AppError> {
 async fn account_form(
     State(db): State<Db>,
     CurrentUser(user): CurrentUser,
+    Query(query): Query<AccountQuery>,
 ) -> Result<Html<String>, AppError> {
     let sessions = store::count_sessions_for_user(&db, user.id).await?;
+    let notice = if query.changed.as_deref() == Some("1") {
+        Some("Your password was changed. Other devices were signed out.".to_owned())
+    } else if query.logged_out.as_deref() == Some("1") {
+        Some("Other devices were signed out. This device remains signed in.".to_owned())
+    } else {
+        None
+    };
     Ok(Html(
         templates::AccountTemplate {
             email: user.email,
             sessions,
             error: None,
-            notice: None,
+            notice,
         }
         .render()?,
     ))
@@ -246,9 +280,18 @@ struct PasswordForm {
 async fn change_password(
     State(db): State<Db>,
     mut session: AuthSession,
+    headers: HeaderMap,
     CurrentUser(user): CurrentUser,
     Form(form): Form<PasswordForm>,
 ) -> Result<Response, AppError> {
+    if let Some(retry_after) =
+        rate_limit_delay(&db, &headers, "password-change", 10, 60 * 60).await?
+    {
+        return Ok(rate_limited(
+            render_account_error(&user, "Too many password changes. Please try again later."),
+            retry_after,
+        ));
+    }
     // The cheap checks come first. Telling someone their two new passwords
     // differ should not cost a 50ms Argon2 verification.
     let rejection = match check_new_password(&form) {
@@ -359,6 +402,32 @@ fn render_account_error(user: &User, message: &str) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
+}
+
+fn rate_limited(mut response: Response, retry_after: u64) -> Response {
+    *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+    response.headers_mut().insert(
+        header::RETRY_AFTER,
+        HeaderValue::from_str(&retry_after.to_string()).expect("numeric Retry-After is valid"),
+    );
+    response
+}
+
+async fn rate_limit_delay(
+    db: &Db,
+    headers: &HeaderMap,
+    scope: &str,
+    limit: i64,
+    window_seconds: i64,
+) -> Result<Option<u64>, AppError> {
+    let Some(address) = super::middleware::rate_limit_address(headers) else {
+        return Ok(None);
+    };
+    let retry_after = super::allow_auth_attempt(db, scope, &address, limit, window_seconds).await?;
+    if let Some(seconds) = retry_after {
+        tracing::warn!(scope, retry_after = seconds, "auth request rate limited");
+    }
+    Ok(retry_after)
 }
 
 fn session_error(err: axum_login::Error<AuthBackend>) -> AppError {

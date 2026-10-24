@@ -4,6 +4,5 @@
 .env
 /.sqlx
 /docs
-/tests
 /.freebuff
 /practice.db

@@ -14,10 +14,12 @@
                 type="text"
                 name="text"
                 placeholder="What needs doing?"
-                maxlength="280"
+                data-maxlength="280"
+                aria-describedby="todo-text-hint"
                 autocomplete="off"
                 required
             >
+            <p id="todo-text-hint" class="field__hint">Up to 280 characters.</p>
         </div>
         <button type="submit" class="todo-submit btn btn--primary" hx-disabled-elt="this">Add task</button>
     </form>

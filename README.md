@@ -1,10 +1,22 @@
-# practice
+# Practice
 
-A small todo app in Rust: Axum, cookie sessions in Postgres, Askama templates, email verification and password reset.
+A small, server-rendered todo app built with Rust, Axum, Askama, HTMX 4, and libSQL. Accounts can sign up, sign in, change their password, and end other sessions. Each todo is scoped to its owner.
 
-`cargo run` serves it; set `SESSION_SECURE=false` and `APP_ALLOWED_HOST=localhost:3000` to work over plain http locally.
+## Run locally
 
-The server-rendered templates use Askama, HTMX, and Tailwind CSS. Tailwind is compiled at build time; the generated `static/app.css` is embedded in the Rust binary and should be regenerated and committed with template or style changes:
+Rust is required. The app defaults to a local `practice.db` file, `127.0.0.1:3000`, and secure cookies. For plain HTTP development, set:
+
+```powershell
+$env:SESSION_SECURE = "false"
+$env:APP_ALLOWED_HOST = "127.0.0.1:3000,localhost:3000"
+cargo run
+```
+
+The development database is created and migrated automatically. To use Turso instead, set `DATABASE_URL` to a `libsql://` URL and `DATABASE_AUTH_TOKEN` to its token. Never commit either secret.
+
+## Frontend assets
+
+Askama compiles templates into the Rust binary. Tailwind builds `static/app.css`, which the server embeds at compile time. After changing a template or style, rebuild the CSS and restart/rebuild the app:
 
 ```sh
 npm ci
@@ -12,8 +24,22 @@ npm run css:build
 cargo run
 ```
 
-Use `npm run css:watch` while editing templates and styles. Vercel's Rust builder embeds the committed `static/app.css` directly.
+Use `npm run css:watch` while editing styles. The vendored `static/vendor/htmx.min.js` is pinned to 4.0.0.
 
-For Vercel, keep `SESSION_SECURE=true` and set `CRON_SECRET` to a random secret of at least 16 characters. The CSRF check accepts the current request hostname and Vercel's deployment/production hostnames; `APP_ALLOWED_HOST` can contain additional comma-separated trusted domains. The configured daily cron uses `CRON_SECRET` to authorize expired-session cleanup.
+## Deploy to Vercel
 
-Tests build the same router as the binary through `app::build_app_with`, which swaps in a mailer that captures messages instead of sending them.
+Configure `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SESSION_SECURE=true`, and a random `CRON_SECRET` of at least 16 characters. The daily Vercel cron uses the secret to authorize expired-session cleanup. Add custom trusted domains to `APP_ALLOWED_HOST` only when needed; Vercel deployment hostnames are included automatically.
+
+## Account limitations
+
+The app does not send email. Email verification and password reset are not available, so users must keep their password safe. Account deletion and task export are not currently available.
+
+## Project map
+
+- `src/app.rs` — routes, session layer, shared middleware, static assets
+- `src/auth/` — authentication, password handling, account pages, session storage
+- `src/todo/` — todo handlers, queries, and templates
+- `src/db.rs` and `migrations/` — libSQL connection and schema
+- `templates/` and `static/` — server-rendered UI and browser assets
+- `tests/` — router and data-layer coverage
+- `AUDIT_REMEDIATION_PLAN.md` — audit findings and remaining roadmap

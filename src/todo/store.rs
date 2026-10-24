@@ -25,7 +25,7 @@ pub const MAX_TEXT_LEN: usize = 280;
 /// the database.
 fn validated(text: &str) -> Option<&str> {
     let text = text.trim();
-    if text.is_empty() || text.len() > MAX_TEXT_LEN {
+    if text.is_empty() || text.chars().count() > MAX_TEXT_LEN {
         return None;
     }
     Some(text)

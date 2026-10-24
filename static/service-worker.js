@@ -1,8 +1,9 @@
 // Cache public assets and a data-free offline screen. Never persist account pages
 // or todo responses: they can contain private data on a shared device.
-var CACHE_NAME = 'todo-v5';
+var CACHE_NAME = 'todo-v7';
 var STATIC_ASSETS = [
   '/offline',
+  '/favicon.ico',
   '/static/vendor/htmx.min.js',
   '/static/app.css',
   '/static/theme-toggle.js',
@@ -39,10 +40,21 @@ self.addEventListener('fetch', function (event) {
   var url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  if (url.pathname.startsWith('/static/')) {
+  if (url.pathname.startsWith('/static/') || url.pathname === '/favicon.ico') {
     event.respondWith(
-      caches.match(request).then(function (cached) {
-        return cached || fetch(request);
+      caches.open(CACHE_NAME).then(function (cache) {
+        return fetch(request).then(function (response) {
+          if (!response.ok) return response;
+          return cache.put(request, response.clone()).then(function () {
+            return response;
+          }, function () {
+            return response;
+          });
+        }).catch(function () {
+          return cache.match(request).then(function (cached) {
+            return cached || Response.error();
+          });
+        });
       })
     );
     return;

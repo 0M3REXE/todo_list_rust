@@ -11,8 +11,24 @@ use super::AuthSession;
 
 /// htmx sets this on every request it makes, and reads `HX-Redirect` back to
 /// tell it to do a full browser navigation instead of a swap.
-const HX_REQUEST: &str = "hx-request";
+const HX_REQUEST_TYPE: &str = "hx-request-type";
 const HX_REDIRECT: &str = "hx-redirect";
+
+/// Vercel overwrites this header with the requester's public IP. For a local
+/// dev server, use a fixed local bucket rather than trusting spoofable XFF.
+pub fn rate_limit_address(headers: &HeaderMap) -> Option<String> {
+    if std::env::var_os("VERCEL").is_some() {
+        return Some(headers
+            .get("x-vercel-forwarded-for")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(',').next())
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && value.len() <= 128)
+            .unwrap_or("missing-vercel-client-ip")
+            .to_owned());
+    }
+    None
+}
 
 /// Sends anyone without a session to the login page.
 ///
@@ -29,7 +45,12 @@ pub async fn require_auth(req: Request, next: Next) -> Response {
         return next.run(req).await;
     }
 
-    if req.headers().contains_key(HX_REQUEST) {
+    if req
+        .headers()
+        .get(HX_REQUEST_TYPE)
+        .and_then(|value| value.to_str().ok())
+        == Some("partial")
+    {
         return (StatusCode::OK, [(HX_REDIRECT, "/login")]).into_response();
     }
 
@@ -58,30 +79,25 @@ pub async fn verify_origin(
         return next.run(req).await;
     }
 
-    // Modern browsers report this even when privacy settings omit Referer.
-    // Reject cross-site writes independently of Origin so same-site sibling
-    // subdomains cannot skip the origin check.
-    if headers
-        .get("sec-fetch-site")
-        .and_then(|value| value.to_str().ok())
-        == Some("cross-site")
-    {
-        return (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response();
-    }
-
-    // A supplied but malformed Origin/Referer must fail closed. Requests with
-    // neither header remain supported for non-browser clients; browser writes
-    // are still covered by Sec-Fetch-Site above and SameSite cookies.
+    // Prefer the browser's origin proof. Fetch Metadata can describe a request
+    // as cross-site when a trusted custom domain is routed through a different
+    // deployment hostname, so it must not override a matching Origin/Referer.
+    // If a browser sends no origin proof, Fetch Metadata still fails closed.
     let supplied_origin = headers.contains_key(header::ORIGIN)
         || headers.contains_key(header::REFERER);
     let Some(presented) = presented_host(&headers) else {
-        return if supplied_origin {
+        let cross_site = headers
+            .get("sec-fetch-site")
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.eq_ignore_ascii_case("cross-site"));
+        return if supplied_origin || cross_site {
             (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response()
         } else {
             next.run(req).await
         };
     };
 
+    // Vercel preserves the public hostname in Host, including custom domains.
     let request_host = req
         .headers()
         .get(header::HOST)
@@ -98,7 +114,13 @@ pub async fn verify_origin(
         return next.run(req).await;
     }
 
-    tracing::warn!(host = %presented, request_host = ?request_host, %allowed_host, "rejected a cross-origin request");
+    tracing::warn!(
+        host = %presented,
+        request_host = ?request_host,
+        fetch_site = ?headers.get("sec-fetch-site").and_then(|value| value.to_str().ok()),
+        %allowed_host,
+        "rejected a cross-origin request"
+    );
     (StatusCode::FORBIDDEN, "cross-origin request rejected").into_response()
 }
 
@@ -129,8 +151,13 @@ fn presented_host(headers: &HeaderMap) -> Option<String> {
 fn normalize_host(value: &str) -> Option<String> {
     let value = value.trim();
     let authority = match value.split_once("://") {
-        Some((_, rest)) => rest.split('/').next().unwrap_or_default(),
-        None => value.split('/').next().unwrap_or_default(),
+        Some((scheme, rest))
+            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") =>
+        {
+            rest.split(['/', '?', '#']).next().unwrap_or_default()
+        }
+        Some(_) => return None,
+        None => value.split(['/', '?', '#']).next().unwrap_or_default(),
     };
     if authority.is_empty()
         || authority.contains('@')

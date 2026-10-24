@@ -68,6 +68,7 @@ pub static OFFLINE_HTML: &str = include_str!("../static/offline.html");
 pub static MANIFEST_JSON: &str = include_str!("../static/manifest.json");
 /// The app's header mark and platform icons.
 pub static BRAND_MARK_SVG: &str = include_str!("../static/brand-mark.svg");
+pub static FAVICON_ICO: &[u8] = include_bytes!("../static/favicon.ico");
 pub static ICON_180_PNG: &[u8] = include_bytes!("../static/icons/icon-180x180.png");
 pub static ICON_192_PNG: &[u8] = include_bytes!("../static/icons/icon-192x192.png");
 pub static ICON_512_PNG: &[u8] = include_bytes!("../static/icons/icon-512x512.png");
@@ -102,7 +103,7 @@ impl Default for AppConfig {
 
 impl AppConfig {
     /// Reads the settings from the environment, falling back to the defaults.
-    pub fn from_env() -> Self {
+    pub fn from_env() -> Result<Self, String> {
         let defaults = Self::default();
 
         let session_secure = std::env::var("SESSION_SECURE")
@@ -138,10 +139,26 @@ impl AppConfig {
         }
         let allowed_host = allowed_hosts.join(",");
 
-        Self {
+        let config = Self {
             session_secure,
             allowed_host,
+        };
+
+        if std::env::var_os("VERCEL").is_some() {
+            if !config.session_secure {
+                return Err("SESSION_SECURE must be true on Vercel".to_owned());
+            }
+            if std::env::var("DATABASE_URL").is_err() {
+                return Err("DATABASE_URL must be configured on Vercel".to_owned());
+            }
+            let secret = std::env::var("CRON_SECRET")
+                .map_err(|_| "CRON_SECRET must be configured on Vercel".to_owned())?;
+            if secret.trim() != secret || secret.len() < 16 {
+                return Err("CRON_SECRET must be at least 16 characters with no surrounding whitespace".to_owned());
+            }
         }
+
+        Ok(config)
     }
 }
 
@@ -185,6 +202,19 @@ fn image_asset(body: &'static [u8]) -> Response {
         .into_response()
 }
 
+/// Serves the browser's conventional root favicon URL.
+fn favicon_asset(body: &'static [u8]) -> Response {
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "image/x-icon"),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        axum::body::Body::from(body),
+    )
+        .into_response()
+}
+
 /// The stylesheet keeps a stable URL so new deployments must revalidate it.
 fn stylesheet() -> Response {
     (
@@ -203,16 +233,14 @@ fn stylesheet() -> Response {
 /// Static assets already set their own long-lived immutable headers via
 /// `asset()`, so this middleware only touches responses that haven't
 /// specified a cache policy. User-specific HTML must never be stored by
-/// shared caches (CDNs, proxies), so we mark it `private`. `no-cache` means
-/// the browser can keep a copy but must revalidate with the server before
-/// using it — which, for a todo list that changes constantly, is the right
-/// tradeoff between speed and freshness.
+/// shared caches (CDNs, proxies) or a browser's disk cache, so private pages
+/// must not be retained after logout or on a shared device.
 async fn cache_control(req: Request, next: Next) -> Response {
     let mut response = next.run(req).await;
     if response.headers().get(header::CACHE_CONTROL).is_none() {
         let _ = response.headers_mut().insert(
             header::CACHE_CONTROL,
-            header::HeaderValue::from_static("private, no-cache, max-age=0"),
+            header::HeaderValue::from_static("private, no-store"),
         );
     }
     response
@@ -243,6 +271,10 @@ async fn cleanup_expired_sessions(
         tracing::error!("CRON_SECRET is not configured");
         return Ok(StatusCode::SERVICE_UNAVAILABLE);
     };
+    if secret.trim() != secret || secret.len() < 16 {
+        tracing::error!("CRON_SECRET is invalid");
+        return Ok(StatusCode::SERVICE_UNAVAILABLE);
+    }
     let expected = format!("Bearer {secret}");
     if headers
         .get(header::AUTHORIZATION)
@@ -284,7 +316,7 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route("/api/maintenance/expired-sessions", get(cleanup_expired_sessions))
         .with_state(db.clone());
 
-    Router::new()
+    let mut app = Router::new()
         // Public first: landing page, then auth pages.
         .route("/", get(landing))
         .merge(auth::routes(db.clone()))
@@ -339,6 +371,10 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
         .route(
             "/static/brand-mark.svg",
             get(|| std::future::ready(asset(BRAND_MARK_SVG, "image/svg+xml"))),
+        )
+        .route(
+            "/favicon.ico",
+            get(|| std::future::ready(favicon_asset(FAVICON_ICO))),
         )
         .route(
             "/static/icons/icon-180x180.png",
@@ -398,7 +434,16 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             StatusCode::REQUEST_TIMEOUT,
             REQUEST_TIMEOUT,
         ))
-        .layer(CatchPanicLayer::new())
+        .layer(CatchPanicLayer::new());
+
+    if config.session_secure {
+        app = app.layer(SetResponseHeaderLayer::overriding(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000"),
+        ));
+    }
+
+    app
 }
 
 /// Deletes expired session rows on a timer, until told to stop.

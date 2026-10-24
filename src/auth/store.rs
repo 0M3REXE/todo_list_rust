@@ -12,6 +12,7 @@
 
 use async_trait::async_trait;
 use libsql::Error;
+use sha2::{Digest, Sha256};
 
 use axum_login::tower_sessions::{
     ExpiredDeletion, SessionStore,
@@ -67,19 +68,19 @@ fn is_unique_violation(err: &Error) -> bool {
 /// per address: a simultaneous signup on the same address is a race here, and
 /// the loser gets the same "already registered" outcome.
 pub async fn create_user(db: &Db, email: &str, password_hash: &str) -> Result<Option<User>, Error> {
-    match db::execute(
+    let id = match db::opt_query(
         db,
-        "insert into users (email, password_hash, created_at) values (?1, ?2, ?3)",
+        "insert into users (email, password_hash, created_at) values (?1, ?2, ?3) returning id",
         vec![db::ps(email), db::ps(password_hash), db::ps(db::now_ts())],
+        |row| db::ri(row, 0),
     )
     .await
     {
-        Ok(_) => {}
+        Ok(Some(id)) => id,
+        Ok(None) => return Ok(None),
         Err(err) if is_unique_violation(&err) => return Ok(None),
         Err(err) => return Err(err),
-    }
-
-    let id = db::scalar_i64(db, "select last_insert_rowid()", vec![]).await?;
+    };
     Ok(Some(User::new(id, email.to_owned(), password_hash)))
 }
 
@@ -187,6 +188,10 @@ impl DbStore {
         }
         Ok(())
     }
+
+    fn is_session_id_collision(err: &Error) -> bool {
+        err.to_string().contains("session id already exists") || is_unique_violation(err)
+    }
 }
 
 /// What a one-time lookup is for. Sessions hold a JSON payload; the owner's id
@@ -207,7 +212,8 @@ impl SessionStore for DbStore {
         for _ in 0..3 {
             match self.insert_new(record).await {
                 Ok(()) => return Ok(()),
-                Err(_) => record.id = Id::default(),
+                Err(err) if Self::is_session_id_collision(&err) => record.id = Id::default(),
+                Err(err) => return Err(backend(err)),
             }
         }
         Err(SessionError::Backend(
@@ -274,6 +280,14 @@ impl ExpiredDeletion for DbStore {
         )
         .await
         .map_err(backend)?;
+        let oldest_window = time::OffsetDateTime::now_utc().unix_timestamp() - 24 * 60 * 60;
+        db::execute(
+            &self.db,
+            "delete from auth_rate_limits where window_start < ?1",
+            vec![db::pi(oldest_window)],
+        )
+        .await
+        .map_err(backend)?;
         Ok(())
     }
 }
@@ -305,6 +319,38 @@ pub async fn count_sessions_for_user(db: &Db, user_id: i64) -> Result<i64, Error
         vec![db::pi(user_id), db::ps(db::now_ts())],
     )
     .await
+}
+
+/// Atomically consumes one fixed-window auth attempt shared across app instances.
+/// Only the hash of the client address is stored in the database.
+pub async fn allow_auth_attempt(
+    db: &Db,
+    scope: &str,
+    client_address: &str,
+    limit: i64,
+    window_seconds: i64,
+) -> Result<Option<u64>, Error> {
+    let now = time::OffsetDateTime::now_utc().unix_timestamp();
+    let window_start = now.div_euclid(window_seconds) * window_seconds;
+    let key = format!("{scope}:{client_address}");
+    let bucket: String = Sha256::digest(key.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+
+    let attempts = db::scalar_i64(
+        db,
+        "insert into auth_rate_limits (bucket, window_start, attempts)
+         values (?1, ?2, 1)
+         on conflict (bucket) do update set
+             attempts = case when window_start = excluded.window_start then attempts + 1 else 1 end,
+             window_start = excluded.window_start
+         returning attempts",
+        vec![db::ps(bucket), db::pi(window_start)],
+    )
+    .await?;
+
+    Ok((attempts > limit).then_some((window_start + window_seconds - now) as u64))
 }
 
 /// The session record is a library type, so it has to be turned into text on

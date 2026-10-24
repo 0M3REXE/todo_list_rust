@@ -17,7 +17,8 @@ pub use handlers::{account_routes, routes};
 pub use middleware::{require_auth, safe_next, verify_origin};
 pub use password::{MAX_PASSWORD_LEN, MIN_PASSWORD_LEN};
 pub use store::{
-    DbStore, count_sessions_for_user, create_user, delete_sessions_for_user, find_user,
+    DbStore, allow_auth_attempt, count_sessions_for_user, create_user, delete_sessions_for_user,
+    find_user,
     set_password, user_id_by_email,
 };
 pub(crate) use templates::LandingTemplate;
