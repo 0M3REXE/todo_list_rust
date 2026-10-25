@@ -5,7 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#d4a033">
     <title>You're offline · Todo List</title>
-    <script src="/static/theme-init.js"></script>
+    <script>// Applies the saved theme before the stylesheet paints.
+//
+// Inlined (allow-listed by a script-src hash) rather than served as a file
+// because this is code on the critical path: it must run before the first
+// paint so dark-mode visitors never see a light flash.
+(function () {
+  try {
+    var theme = localStorage.getItem('todo-theme');
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  } catch (_) { /* Storage disabled: the light default below is fine. */ }
+})();</script>
+
     <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="page">

@@ -12,11 +12,23 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/static/icons/icon-180x180.png">
     <meta name="theme-color" content="#d4a033">
-    <script src="/static/theme-init.js"></script>
-    <script src="/static/password-toggle.js" defer></script>
-    <script src="/static/theme-toggle.js" defer></script>
+<script>// Applies the saved theme before the stylesheet paints.
+//
+// Inlined (allow-listed by a script-src hash) rather than served as a file
+// because this is code on the critical path: it must run before the first
+// paint so dark-mode visitors never see a light flash.
+(function () {
+  try {
+    var theme = localStorage.getItem('todo-theme');
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  } catch (_) { /* Storage disabled: the light default below is fine. */ }
+})();</script>
+<script src="/static/vendor/alpine.min.js" defer></script>
+<script src="/static/app.js" defer></script>
 </head>
-<body class="page min-h-screen bg-[var(--paper)] text-[var(--ink)] antialiased">
+<body x-data="app" class="page min-h-screen bg-[var(--paper)] text-[var(--ink)] antialiased">
     <a href="#main-content" class="skip-link">Skip to login form</a>
     <header class="shell"><div class="header">
         {% include "brand.html" %}
@@ -35,7 +47,7 @@
                 <div class="field"><label class="field__label" for="email">Email</label><input class="input" type="email" id="email" name="email" autocomplete="username" required></div>
                 <div class="field"><label class="field__label" for="password">Password</label><div class="input-group">
                     <input class="input" type="password" id="password" name="password" autocomplete="current-password" required>
-                    <button class="input-group__toggle" type="button" data-password-toggle aria-pressed="false">Show</button>
+                    <button class="input-group__toggle" type="button" @click="togglePasswords($event)" aria-pressed="false">Show</button>
                 </div></div>
                 <button class="btn btn--primary btn--full" type="submit">Log in</button>
             </form>

@@ -53,15 +53,6 @@ use askama::Template as _;
 
 /// The app stylesheet.
 pub static APP_CSS: &str = include_str!("../static/app.css");
-/// The small in-house script for the password fields.
-pub static PASSWORD_TOGGLE_JS: &str = include_str!("../static/password-toggle.js");
-/// Theme preload: applies the saved theme before the stylesheet paints.
-/// Render-blocking on purpose; see the file's own header comment.
-pub static THEME_INIT_JS: &str = include_str!("../static/theme-init.js");
-/// Theme toggle: light/dark mode persistence.
-pub static THEME_TOGGLE_JS: &str = include_str!("../static/theme-toggle.js");
-/// Keyboard shortcuts + client-side search filter.
-pub static KEYBOARD_JS: &str = include_str!("../static/keyboard.js");
 /// Service worker for offline PWA support.
 pub static SERVICE_WORKER_JS: &str = include_str!("../static/service-worker.js");
 /// A safe, data-free page shown when an installed app opens without a network.
@@ -78,6 +69,11 @@ pub static ICON_512_MASKABLE_PNG: &[u8] =
     include_bytes!("../static/icons/icon-512-maskable.png");
 /// Vendored htmx, unmodified.
 pub static HTMX_JS: &str = include_str!("../static/vendor/htmx.min.js");
+/// Vendored Alpine (the CSP build: no `unsafe-eval`, no inline `x-data={}`).
+pub static ALPINE_JS: &str = include_str!("../static/vendor/alpine.min.js");
+/// One Alpine component + htmx glue for the whole app. Contents change between
+/// edits, so it is served with `must-revalidate` like the stylesheet.
+pub static APP_JS: &str = include_str!("../static/app.js");
 
 /// How long a session may sit untouched before it stops working, and whether
 /// the cookie is allowed to leave a plain-http connection.
@@ -281,20 +277,25 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             get(|| std::future::ready(stylesheet())),
         )
         .route(
-            "/static/password-toggle.js",
-            get(|| std::future::ready(asset(PASSWORD_TOGGLE_JS, "text/javascript"))),
+            "/static/vendor/alpine.min.js",
+            get(|| std::future::ready(asset(ALPINE_JS, "text/javascript"))),
         )
         .route(
-            "/static/theme-init.js",
-            get(|| std::future::ready(asset(THEME_INIT_JS, "text/javascript"))),
-        )
-        .route(
-            "/static/theme-toggle.js",
-            get(|| std::future::ready(asset(THEME_TOGGLE_JS, "text/javascript"))),
-        )
-        .route(
-            "/static/keyboard.js",
-            get(|| std::future::ready(asset(KEYBOARD_JS, "text/javascript"))),
+            "/static/app.js",
+            get(|| {
+                std::future::ready((
+                    StatusCode::OK,
+                    [
+                        (header::CONTENT_TYPE, "text/javascript"),
+                        // Stable URL, but contents change between edits —
+                        // revalidate like the stylesheet rather than serving
+                        // it immutable, so a new build is picked up at once.
+                        (header::CACHE_CONTROL, "public, max-age=0, must-revalidate"),
+                    ],
+                    APP_JS,
+                )
+                    .into_response())
+            }),
         )
         .route(
             "/static/service-worker.js",
@@ -384,7 +385,8 @@ pub fn build_app(db: Db, config: AppConfig) -> Router {
             HeaderValue::from_static(
                 "default-src 'self'; \
                  base-uri 'self'; object-src 'none'; frame-ancestors 'none'; \
-                 form-action 'self'; script-src 'self'; \
+                 form-action 'self'; script-src 'self' \
+                 'sha256-Yg5vmur3/59vdKj7wIu7Bu7aifpYCWZqdoZ74HVh5wg='; \
                  style-src 'self' https://fonts.googleapis.com; \
                  font-src 'self' https://fonts.gstatic.com; \
                  img-src 'self' data:; connect-src 'self'",

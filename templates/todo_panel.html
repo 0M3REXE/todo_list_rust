@@ -1,6 +1,6 @@
 <div id="todo-panel" class="todo-panel card">
     <div class="todo-search">
-        <input id="todo-search" class="input" type="search" name="search" placeholder="Search tasks…" autocomplete="off" aria-label="Search todos">
+        <input id="todo-search" class="input" type="search" name="search" placeholder="Search tasks…" autocomplete="off" aria-label="Search todos" x-ref="search" @input="onSearchInput()">
         <button type="button" class="todo-search__clear" data-clear-search aria-label="Clear search" title="Clear search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
         </button>
@@ -15,6 +15,7 @@
                 name="text"
                 placeholder="What needs doing?"
                 data-maxlength="280"
+                x-ref="newTodo"
                 aria-describedby="todo-text-hint"
                 autocomplete="off"
                 required

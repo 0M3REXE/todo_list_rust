@@ -1,12 +1,13 @@
 // Cache public assets and a data-free offline screen. Never persist account pages
 // or todo responses: they can contain private data on a shared device.
-var CACHE_NAME = 'todo-v7';
+var CACHE_NAME = 'todo-v9';
 var STATIC_ASSETS = [
   '/offline',
   '/favicon.ico',
   '/static/vendor/htmx.min.js',
+  '/static/vendor/alpine.min.js',
+  '/static/app.js',
   '/static/app.css',
-  '/static/theme-toggle.js',
   '/static/manifest.json',
   '/static/brand-mark.svg',
   '/static/icons/icon-180x180.png',

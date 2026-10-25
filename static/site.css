@@ -790,13 +790,30 @@ html[data-theme="dark"] .theme-icon--sun { display: block; }
   border-bottom: 1px solid var(--surface-border);
   transition:
     background-color var(--dur-fast) var(--ease),
-    opacity var(--dur-base) var(--ease);
+    opacity var(--dur-base) var(--ease),
+    transform var(--dur-base) var(--ease);
 }
 .todo-row:last-child {
   border-bottom: none;
 }
 .todo-row:hover {
   background: var(--surface-hover);
+}
+
+/* Optimistic delete — painted instantly, vanish gracefully while the
+   request is in flight; the swapped list or the restore pass cleans up. */
+.todo-row--leaving {
+  opacity: 0;
+  transform: translateX(8px);
+  pointer-events: none;
+}
+
+/* Newly added todo that has not been confirmed by the server yet. */
+.todo-row[data-optimistic] {
+  opacity: 0.75;
+}
+html[data-theme="dark"] .todo-row[data-optimistic] {
+  opacity: 0.85;
 }
 
 /* Custom checkbox */
